@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&amp;family=Public+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#dbdadb","error-container":"#ffdad6","outline-variant":"#c3c6d5","surface-tint":"#2259bf","primary-fixed-dim":"#b1c5ff","secondary-container":"#dfe3e8","on-secondary-fixed-variant":"#42474b","on-tertiary-container":"#4a3f00","error":"#ba1a1a","surface-container-lowest":"#ffffff","secondary-fixed-dim":"#c2c7cc","on-primary-container":"#e7ebff","surface-container-low":"#f5f3f4","on-secondary":"#ffffff","surface-bright":"#faf9fa","surface-container-highest":"#e3e2e3","on-tertiary-fixed-variant":"#524600","on-tertiary-fixed":"#211b00","on-error-container":"#93000a","primary-fixed":"#d9e2ff","primary":"#094cb2","surface-container-high":"#e9e8e9","on-surface":"#1b1c1d","tertiary-fixed-dim":"#dcc661","on-background":"#1b1c1d","tertiary-fixed":"#f9e37a","inverse-primary":"#b1c5ff","secondary-fixed":"#dfe3e8","surface-variant":"#e3e2e3","surface":"#faf9fa","on-primary":"#ffffff","on-primary-fixed-variant":"#00419d","on-tertiary":"#ffffff","outline":"#737784","on-secondary-container":"#606569","surface-container":"#efedee","secondary":"#5a5f63","on-secondary-fixed":"#171c20","inverse-on-surface":"#f2f0f1","tertiary-container":"#bfab49","background":"#faf9fa","tertiary":"#6d5e00","on-surface-variant":"#434653","inverse-surface":"#303031","primary-container":"#3366cc","on-primary-fixed":"#001946","on-error":"#ffffff"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{},"fontFamily":{"headline":["Noto Serif"],"display":["Noto Serif"],"body":["Inter"],"label":["Public Sans"]},"fontSize":{}}}}</script></head><body class="bg-surface font-body text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-low z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)] select-none"><div class="flex flex-col"><div class="h-12 px-5 flex items-center justify-between bg-surface-container"><div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div><div class="w-3 h-3 rounded-full bg-[#febc2e]"></div><div class="w-3 h-3 rounded-full bg-[#28c840]"></div></div><div class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-container-high text-[11px] font-label font-bold text-tertiary tracking-wider uppercase"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Tauri 2.1 Wasm</div></div><div class="px-6 py-5 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-on-primary shadow-sm"><span class="material-symbols-outlined text-[20px]">menu_book</span></div><div><div class="font-headline text-lg font-bold tracking-tight text-on-surface">FluxPDF</div><div class="text-[11px] font-label tracking-wide uppercase text-on-surface-variant">Editorial Workstation</div></div></div><div class="px-4 mb-2"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Workspaces</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="document-workspace" href="#"><span class="material-symbols-outlined text-[20px]">description</span><span>Document Workspace</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="library-and-recent" href="#"><span class="material-symbols-outlined text-[20px]">auto_stories</span><span>Library &amp; Recent</span></a><a aria-current="page" class="flex items-center gap-3 px-3 py-2 rounded-lg transition-all bg-surface-container-highest text-primary font-semibold" data-path="page-organizer" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span>Page Organizer</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="advanced-editor" href="#"><span class="material-symbols-outlined text-[20px]">edit_note</span><span>Advanced Editor</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="sign-and-protect" href="#"><span class="material-symbols-outlined text-[20px]">verified_user</span><span>Sign &amp; Protect</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="ocr-and-export" href="#"><span class="material-symbols-outlined text-[20px]">document_scanner</span><span>OCR &amp; Export</span></a></nav></div><div class="px-4 mt-4"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Storage Volumes</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="cloud-drives" href="#"><span class="material-symbols-outlined text-[20px]">cloud_done</span><span>Cloud Drives</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="local-vault" href="#"><span class="material-symbols-outlined text-[20px]">lock</span><span>Local Vault</span></a></nav></div></div><div class="p-4 bg-surface-container/60"><div class="p-3 rounded-xl bg-surface-container-lowest flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-on-primary font-headline font-semibold text-xs">FP</div><div class="flex flex-col"><span class="text-xs font-semibold text-on-surface font-headline leading-tight">Editorial Studio</span><span class="text-[10px] font-label text-tertiary font-bold uppercase tracking-wider">Pro Member</span></div></div><a class="text-on-surface-variant hover:text-primary transition-colors" data-path="preferences" href="#"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-28 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between"><div class="h-14 px-6 flex items-center justify-between border-b-0"><div class="flex items-center gap-2 overflow-x-auto"><div class="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-surface-container-high text-xs font-medium text-on-surface shadow-xs"><span class="material-symbols-outlined text-[16px] text-primary">picture_as_pdf</span><span class="font-label font-medium tracking-tight">Contract_Q3_Review.pdf</span><span class="w-1.5 h-1.5 rounded-full bg-primary"></span><span class="material-symbols-outlined text-[15px] text-on-surface-variant hover:text-error transition-colors cursor-pointer">close</span></div><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"><span class="material-symbols-outlined text-[16px]">article</span><span class="font-label">Scholar_Treatise_v4.pdf</span></div><div class="p-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span></div></div><div class="flex items-center gap-4"><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-xs text-on-surface-variant min-w-[220px]"><span class="material-symbols-outlined text-[16px]">search</span><span class="flex-1">Search text or tools...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-[10px] font-label font-bold text-secondary uppercase">⌘K</kbd></div><div class="flex items-center gap-1"><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">view_sidebar</span></button><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">fit_screen</span></button></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="h-14 px-6 flex items-center justify-between bg-surface-container-low/70"><div class="flex items-center gap-1.5"><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">pan_tool</span><span>Hand</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">near_me</span><span>Select</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">ink_highlighter</span><span>Highlight</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">comment</span><span>Note</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">draw</span><span>Ink</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">format_shapes</span><span>Add Text</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">signature</span><span>Stamp &amp; Sign</span></button></div><div class="flex items-center gap-3 text-xs font-label text-on-surface-variant"><div class="flex items-center gap-1 bg-surface-container-high px-2.5 py-1 rounded-lg"><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">remove</span></button><span class="font-medium text-[11px] px-1">125%</span><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">add</span></button></div><span class="text-[11px] text-secondary font-medium">Page 3 of 42</span><button class="p-1.5 hover:text-on-surface rounded-lg hover:bg-surface-container-high" type="button"><span class="material-symbols-outlined text-[18px]">fullscreen</span></button></div></div></header><main class="w-full pt-28 bg-surface"><div class="flex flex-col w-full">
+<!-- Top Command Ribbon -->
+<header class="sticky top-28 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-8 py-4 shadow-sm flex flex-col gap-3">
+<div class="flex flex-wrap items-center justify-between gap-4">
+<!-- File Metadata & Context -->
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary shadow-xs">
+<span class="material-symbols-outlined text-[22px]">grid_view</span>
+</div>
+<div>
+<div class="flex items-center gap-2.5">
+<h1 class="font-headline text-lg font-semibold text-on-surface tracking-tight">Contract_Q3_Review.pdf</h1>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-[11px] font-label font-medium text-secondary">12 Pages • 24.8 MB</span>
+</div>
+<p class="text-xs font-label text-tertiary font-semibold flex items-center gap-1.5 mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+            3 Pages Selected (P2, P4, P7) — <span class="text-on-surface-variant font-normal">Ready for batch operations</span>
+</p>
+</div>
+</div>
+<!-- Imposition Mode Switchers & Global Actions -->
+<div class="flex items-center gap-3">
+<!-- View Mode Segmented Control -->
+<div class="flex items-center bg-surface-container p-1 rounded-xl">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-lowest text-primary shadow-xs text-xs font-label font-semibold" type="button">
+<span class="material-symbols-outlined text-[16px]">drag_indicator</span>
+<span>Manual Reorder</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors text-xs font-label font-medium" type="button">
+<span class="material-symbols-outlined text-[16px]">auto_stories</span>
+<span>Booklet Flow</span>
+</button>
+</div>
+<!-- Zoom Slider -->
+<div class="hidden xl:flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-xl">
+<span class="material-symbols-outlined text-[16px] text-secondary">photo_size_select_small</span>
+<input class="w-20 accent-primary h-1 bg-surface-container-highest rounded-lg cursor-pointer" max="5" min="1" type="range" value="3"/>
+<span class="material-symbols-outlined text-[18px] text-secondary">photo_size_select_large</span>
+</div>
+<div class="h-6 w-px bg-surface-container-highest mx-1"></div>
+<button class="px-3.5 py-2 rounded-xl text-xs font-label font-semibold text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" type="button">
+          Revert
+        </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary shadow-sm hover:shadow transition-all text-xs font-label font-semibold tracking-wide" type="button">
+<span class="material-symbols-outlined text-[17px]">splitscreen</span>
+<span>Save &amp; Split PDF</span>
+</button>
+</div>
+</div>
+<!-- Batch Actions Sub-Ribbon (Contextual Bar) -->
+<div class="flex items-center justify-between pt-2">
+<div class="flex items-center gap-1.5 flex-wrap">
+<span class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary mr-2">Selection Tools:</span>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">rotate_left</span>
+<span>Rotate -90°</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">rotate_right</span>
+<span>Rotate +90°</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+<span>Duplicate (3)</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">drive_file_move</span>
+<span>Extract to New PDF</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">sync_alt</span>
+<span>Replace Source</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-xs font-label font-medium text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">add_box</span>
+<span>Insert Blank</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-error-container hover:bg-error-container/80 text-xs font-label font-medium text-on-error-container transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+<span>Delete (3)</span>
+</button>
+</div>
+<div class="hidden lg:flex items-center gap-4 text-xs font-label text-on-surface-variant">
+<span>Display Scale: <strong>Imposition Quad</strong></span>
+<span>Paper Profile: <strong>ISO 216 A4</strong></span>
+</div>
+</div>
+</header>
+<!-- Interactive Matrix Status Strip -->
+<div class="px-8 py-3 bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-tertiary">tune</span>
+<span class="font-headline text-xs font-semibold text-on-surface">Page Reordering &amp; Composition Matrix</span>
+</div>
+<span class="text-secondary text-xs">•</span>
+<span class="text-xs font-body text-on-surface-variant">Drag thumbnails to redefine bindery pagination order. Changes recalculate automatically.</span>
+</div>
+<!-- Active Relocation Indicator Badge -->
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed shadow-xs text-xs font-label font-semibold animate-pulse">
+<span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
+<span>Relocating Page 3 to Slot 6</span>
+</div>
+</div>
+<!-- Main Imposition Studio Work Area -->
+<div class="p-8 pb-32">
+<!-- Visual Page Grid: 4 columns standard responsive -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start">
+<!-- Page 1: Cover Page -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between mb-3">
+<span class="font-headline text-sm font-semibold text-on-surface">01</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">Cover</span>
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-300" data-alt="Cover page of a legal document titled Contract Review with dark royal blue typography, subtle cream paper texture, minimalist editorial layout, and professional signature seals" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCk7hgPA-MsDLRPAP9xbRGpncOrXEWGNsHzdKkh8FqAihVpNleoJoXUAsjLmd3jkzBCcC2NBSdYMZ3AHI8Jzyu8LlaYDOrN-K8oOU7dHbFiKW-J0F6kCypbLssCWk12URiornSbm_mpURqul18-6evwUn_FqX1kBqTeBuFm5LihvKUqwLeFYWPrjTJ5YrmdyyjfaWGNOcMWwn7yzg8wL62eKQRZvuxJJOMSKhSSilg"/>
+<div class="relative z-10 mt-auto bg-surface-container-lowest/80 backdrop-blur-sm p-2 rounded-md">
+<span class="text-[10px] font-headline text-on-surface font-semibold block leading-tight">Master Services Agreement</span>
+<span class="text-[9px] font-label text-secondary block mt-0.5">Vector Typography (RGB 300 DPI)</span>
+</div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-on-surface-variant">
+<span>A4 Portrait</span>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_right</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">zoom_in</span></button>
+</div>
+</div>
+</div>
+<!-- Page 2: Selected Item (Exec Summary) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-md bg-gradient-to-b from-primary-fixed/20 to-transparent transition-all">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-1.5">
+<span class="font-headline text-sm font-bold text-primary">02</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-[10px] font-label font-bold tracking-wider text-on-primary-fixed uppercase">Exec Summary</span>
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer accent-primary" type="checkbox"/>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="High contrast editorial executive summary page with serif heading Executive Summary, multi-column scholarly layout, gold accent highlights, and small metric bar chart" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDht7OIoyzJGGqTRqIaLNX48MWqLqIJNqiATba2H-JaVgNSxeLiO8EUc0T7JNX_OaNReC4atlb3MnxC8rGLsZTQz3ACNll5fKTHOtUA0ZtQ-o1NZCToGgDFrVleVZ8TBocSZ1AwhVfDlWyrPCD1wuyUMtikPJAfJU0uNBsJ0CCKbLLww7rD7VFUSCQsCjKfr7UPP97EDsBBb-arrTd8dseSfXtmxaey6GbfAmSZck8"/>
+<div class="absolute inset-0 bg-primary/5 pointer-events-none"></div>
+<!-- Selection Badge -->
+<div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-on-primary text-[9px] font-label font-bold uppercase shadow-sm">Selected</div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-primary font-medium">
+<span>In Batch Queue (1/3)</span>
+<div class="flex items-center gap-1">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_right</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">content_copy</span></button>
+</div>
+</div>
+</div>
+<!-- Page 3: Active Dragging / Floating State -->
+<div class="relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-2xl scale-105 rotate-2 cursor-grabbing z-20">
+<!-- Floating Drag Pill -->
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-on-primary px-3 py-1 rounded-full text-[10px] font-label font-bold flex items-center gap-1.5 shadow-md whitespace-nowrap">
+<span class="material-symbols-outlined text-[14px]">pan_tool</span>
+<span>Moving Page 3</span>
+</div>
+<div class="flex items-center justify-between mb-3">
+<span class="font-headline text-sm font-bold text-primary">03</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">Financials</span>
+<span class="material-symbols-outlined text-[16px] text-primary">drag_indicator</span>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Dense financial balance sheet document page with financial ledger rows, quarterly tabular breakdowns, editorial serif column titles, clean monochromatic styling with blue highlights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPj7og-3MlQ8xOJgQ_5-pKod4p996Uc1IvKrtZ6KC2KnvNAR5G9V37GbxUt3pRHniZR9DffPtU4KoDRSYMct9ZEEITGYsmj34Ia5cf3heF-q_hYYxk6WUi3-eNWjjTQCM2S1rdbJkS4cZjrVcf7f60R02mi01sGrQjZmoIsX2VKJmMP__rQXl8pEn-eZNGAUryphUkJ_uH2nGpWDGhZpoguBFBHS84VNom5cPCktw"/>
+<div class="absolute inset-0 bg-primary/10"></div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-primary font-bold">
+<span>Active Relocation</span>
+<span>Slot Target: 06</span>
+</div>
+</div>
+<!-- Page 4: Selected Item (Financials) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-md bg-gradient-to-b from-primary-fixed/20 to-transparent transition-all">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-1.5">
+<span class="font-headline text-sm font-bold text-primary">04</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">Financials</span>
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer accent-primary" type="checkbox"/>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Quarterly profit and loss statement with clean ledger layout, bold section headings, subtle gold currency symbols, and minimalist tabular rows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDw_eBN_4q1o9Mv0B8fMS11SZWnlFgq6JoKGCguPJ5AnKgH08ZEJLurTzcLAbUSV6d14xDeXlJeEaH82heIuAvkYFGOkht8WR9FSXlYJnR1JqzyZWoFYGRvnnPqKMo7LruZLWiVHSp1eLdJZCRXg3OzsWtkM7DMBZMMU59XER0ObN7pK6W8JsWkm9L8bj50Hiy9UmQ5UiC7lYTULuUYkHj-gGnJ0SOmtR6NxG_koSo"/>
+<div class="absolute inset-0 bg-primary/5 pointer-events-none"></div>
+<div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-on-primary text-[9px] font-label font-bold uppercase shadow-sm">Selected</div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-primary font-medium">
+<span>In Batch Queue (2/3)</span>
+<div class="flex items-center gap-1">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_right</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">content_copy</span></button>
+</div>
+</div>
+</div>
+<!-- Page 5: Landscape Mode -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between mb-3">
+<span class="font-headline text-sm font-semibold text-on-surface">05</span>
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed text-[9px] font-label font-bold uppercase">90° CW</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">ESG Notes</span>
+</div>
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+</div>
+<!-- Landscape Thumbnail rotated inside portrait bounding frame -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center p-2 shadow-inner">
+<div class="w-[141%] aspect-[1.414/1] rotate-90 overflow-hidden rounded bg-surface-container-lowest shadow-xs relative">
+<img class="w-full h-full object-cover" data-alt="Horizontal landscape diagram illustrating supply chain sustainability governance with tree diagram, clean typography, soft olive and gold accents" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAq2Eu3Q0JZpP2bGg8tH15chvIyHL2TBEoxKOEWR1vahBYtKul0F5_xwPPqzLKeWPZhm5IDqCT7t0-VdSd9kRxdGNUEqCaPn0tXwX-DJncK0WGRZ1iIqrH1QxFU35_JJu4DK_CedIhI0HD39_f1-hB0jnFhgkUVY9IWYeijGZFDKF1xXv_mQnKigMzF9BJ0ui6_5Zo2dZYFc0ifbTwIEnTdu5o8ZdCUoXPEnVkHuXg"/>
+</div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-on-surface-variant">
+<span>A4 Landscape (Rotated)</span>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_left</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">zoom_in</span></button>
+</div>
+</div>
+</div>
+<!-- Page 6: Standard Portrait -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between mb-3">
+<span class="font-headline text-sm font-semibold text-on-surface">06</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">ESG Notes</span>
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Scholarly essay page with large quotation callout in serif italics, two paragraphs of dense modern typography, and small footnote section" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA06CkVCOegV1qrcCvMokabsP5S308lCJAEuiSshTYo50g2a5OgWV3KBndfhbKfs2dZ5EEDLFdw2sJ9wAK3tY7EuZn7WVML9MvaJffaMKJPe6tw8F-XQgnV1XQWaht15-wRyeqXPvBJWDRYM7326yyeB3yFmG_NdKea6HGxcIRSS-9oNEFcnlQHywcbErH-7oh_YIF1nm2W_LV7nGG6aenA3FfjfwAXDwyLw-OCxVo"/>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-on-surface-variant">
+<span>A4 Portrait</span>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_right</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">zoom_in</span></button>
+</div>
+</div>
+</div>
+<!-- Drag Insertion Target Slot -->
+<div class="relative flex flex-col rounded-xl p-4 bg-primary-fixed/20 transition-all items-center justify-center min-h-[340px]">
+<div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary mb-3 shadow-md animate-bounce">
+<span class="material-symbols-outlined text-[24px]">south</span>
+</div>
+<div class="text-center px-4">
+<span class="font-headline text-sm font-bold text-primary block">Drop Page 3 Here</span>
+<span class="text-xs font-label text-on-surface-variant font-medium mt-1 block">Becomes Slot 06 • Reindexes Page 06 to 07</span>
+</div>
+<div class="mt-4 px-3 py-1 rounded bg-surface-container-lowest text-[11px] font-label font-semibold text-secondary uppercase tracking-wider shadow-xs">
+          Shift Cascade Active
+        </div>
+</div>
+<!-- Page 7: Selected Item (Legal Terms) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-md bg-gradient-to-b from-primary-fixed/20 to-transparent transition-all">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-1.5">
+<span class="font-headline text-sm font-bold text-primary">07</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold tracking-wider text-secondary uppercase">Legal</span>
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer accent-primary" type="checkbox"/>
+</div>
+<!-- Thumbnail -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-low rounded-lg overflow-hidden flex flex-col p-4 shadow-inner">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Dense legal contract clause layout with numbered sub-articles, formal legal disclaimer paragraphs, fine editorial serif typography, and margin notes" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjeQZFqspLJLxl8NpIDW-iZMfsR2-IEdCsctj2cApapBNOe22MqIxL88dBYWBfhlm5zYId8sEWDgWO7v3AYu1VUBIQxt8kT4lJ0eHnefD4S0dBrQK7SPmAOFp7-yxPMZMMezUNSqGqjWbDhVXDk-q7XfcvPnmyozluDT3yxXjUO-ngvUkMQGB0Qr2qnQeeO6bs6L7LJH2y0HREpqqaH5-IBN9-rycTo10m3UqMaJQ"/>
+<div class="absolute inset-0 bg-primary/5 pointer-events-none"></div>
+<div class="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-on-primary text-[9px] font-label font-bold uppercase shadow-sm">Selected</div>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-primary font-medium">
+<span>In Batch Queue (3/3)</span>
+<div class="flex items-center gap-1">
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">rotate_right</span></button>
+<button class="p-1 hover:text-primary" type="button"><span class="material-symbols-outlined text-[15px]">content_copy</span></button>
+</div>
+</div>
+</div>
+<!-- Page 8: Encrypted / Protected Page -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between mb-3">
+<span class="font-headline text-sm font-semibold text-on-surface">08</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-[10px] font-label font-bold tracking-wider text-secondary uppercase">Legal</span>
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+</div>
+<!-- Thumbnail Protected -->
+<div class="relative w-full aspect-[1/1.414] bg-surface-container-high rounded-lg overflow-hidden flex flex-col items-center justify-center p-6 text-center shadow-inner">
+<div class="w-12 h-12 rounded-full bg-surface-container-lowest flex items-center justify-center text-tertiary mb-3 shadow-xs">
+<span class="material-symbols-outlined text-[24px]">lock</span>
+</div>
+<span class="text-xs font-headline font-semibold text-on-surface">Encrypted Stream</span>
+<span class="text-[10px] font-body text-secondary mt-1 max-w-[130px]">AES-256 protected page preview restricted</span>
+<button class="mt-3 px-2.5 py-1 rounded-md bg-surface-container-lowest text-[10px] font-label font-bold text-primary uppercase tracking-wider hover:bg-surface-container transition-colors shadow-xs" type="button">
+            Unlock
+          </button>
+</div>
+<div class="flex items-center justify-between mt-3 text-[11px] font-label text-on-surface-variant">
+<span>Signatures Required</span>
+<span class="material-symbols-outlined text-[16px] text-secondary">verified_user</span>
+</div>
+</div>
+<!-- Append Slot Card: Upload / Ingest zone -->
+<div class="relative flex flex-col rounded-xl p-6 bg-surface-container/50 hover:bg-surface-container-high/60 transition-all items-center justify-center min-h-[340px] text-center cursor-pointer group">
+<div class="w-14 h-14 rounded-2xl bg-surface-container-lowest group-hover:bg-primary group-hover:text-on-primary transition-all flex items-center justify-center text-primary shadow-xs mb-4">
+<span class="material-symbols-outlined text-[28px]">add_circle</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface mb-1">+ Append Pages</h3>
+<p class="text-xs font-body text-on-surface-variant max-w-[180px] leading-relaxed mb-4">
+          Drag PDF files, scans, or images here to extend sequence.
+        </p>
+<div class="flex items-center gap-2">
+<span class="px-2 py-1 rounded bg-surface-container-lowest text-[10px] font-label font-medium text-secondary shadow-xs">PDF</span>
+<span class="px-2 py-1 rounded bg-surface-container-lowest text-[10px] font-label font-medium text-secondary shadow-xs">TIFF</span>
+<span class="px-2 py-1 rounded bg-surface-container-lowest text-[10px] font-label font-medium text-secondary shadow-xs">DOCX</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Floating Command Bar -->
+<aside class="fixed bottom-6 left-80 right-8 z-40 flex items-center justify-between bg-surface-container-lowest/90 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-xl">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2.5">
+<span class="w-2.5 h-2.5 rounded-full bg-primary animate-ping"></span>
+<span class="font-headline text-sm font-semibold text-on-surface">3 pages queued</span>
+</div>
+<div class="h-4 w-px bg-surface-container-highest"></div>
+<div class="flex items-center gap-2 text-xs font-label text-on-surface-variant">
+<span>Target: <strong>Export Sub-document</strong></span>
+<span>•</span>
+<span>Pages: <strong>2, 4, 7</strong></span>
+<span>•</span>
+<span>Estimated Size: <strong>6.2 MB</strong></span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-label font-semibold text-on-surface transition-colors" type="button">
+        Deselect All
+      </button>
+<button class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-xs font-label font-semibold text-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">call_split</span>
+<span>Split at Selection</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary shadow-sm hover:shadow-md transition-all text-xs font-label font-semibold" type="button">
+<span class="material-symbols-outlined text-[17px]">file_download</span>
+<span>Extract 3 Pages</span>
+</button>
+</div>
+</aside>
+</div>
+<script>
+  // Simple interactive selection counter logic
+  document.addEventListener('DOMContentLoaded', () => {
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checkedCount = document.querySelectorAll('input[type="checkbox"]:checked').length;
+        console.log(`Page selection updated: ${checkedCount} pages selected.`);
+      });
+    });
+  });
+</script></main></div></body></html>

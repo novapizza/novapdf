@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&amp;family=Public+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#dbdadb","error-container":"#ffdad6","outline-variant":"#c3c6d5","surface-tint":"#2259bf","primary-fixed-dim":"#b1c5ff","secondary-container":"#dfe3e8","on-secondary-fixed-variant":"#42474b","on-tertiary-container":"#4a3f00","error":"#ba1a1a","surface-container-lowest":"#ffffff","secondary-fixed-dim":"#c2c7cc","on-primary-container":"#e7ebff","surface-container-low":"#f5f3f4","on-secondary":"#ffffff","surface-bright":"#faf9fa","surface-container-highest":"#e3e2e3","on-tertiary-fixed-variant":"#524600","on-tertiary-fixed":"#211b00","on-error-container":"#93000a","primary-fixed":"#d9e2ff","primary":"#094cb2","surface-container-high":"#e9e8e9","on-surface":"#1b1c1d","tertiary-fixed-dim":"#dcc661","on-background":"#1b1c1d","tertiary-fixed":"#f9e37a","inverse-primary":"#b1c5ff","secondary-fixed":"#dfe3e8","surface-variant":"#e3e2e3","surface":"#faf9fa","on-primary":"#ffffff","on-primary-fixed-variant":"#00419d","on-tertiary":"#ffffff","outline":"#737784","on-secondary-container":"#606569","surface-container":"#efedee","secondary":"#5a5f63","on-secondary-fixed":"#171c20","inverse-on-surface":"#f2f0f1","tertiary-container":"#bfab49","background":"#faf9fa","tertiary":"#6d5e00","on-surface-variant":"#434653","inverse-surface":"#303031","primary-container":"#3366cc","on-primary-fixed":"#001946","on-error":"#ffffff"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{},"fontFamily":{"headline":["Noto Serif"],"display":["Noto Serif"],"body":["Inter"],"label":["Public Sans"]},"fontSize":{}}}}</script></head><body class="bg-surface font-body text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-low z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)] select-none"><div class="flex flex-col"><div class="h-12 px-5 flex items-center justify-between bg-surface-container"><div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div><div class="w-3 h-3 rounded-full bg-[#febc2e]"></div><div class="w-3 h-3 rounded-full bg-[#28c840]"></div></div><div class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-container-high text-[11px] font-label font-bold text-tertiary tracking-wider uppercase"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Tauri 2.1 Wasm</div></div><div class="px-6 py-5 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-on-primary shadow-sm"><span class="material-symbols-outlined text-[20px]">menu_book</span></div><div><div class="font-headline text-lg font-bold tracking-tight text-on-surface">FluxPDF</div><div class="text-[11px] font-label tracking-wide uppercase text-on-surface-variant">Editorial Workstation</div></div></div><div class="px-4 mb-2"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Workspaces</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="document-workspace" href="#"><span class="material-symbols-outlined text-[20px]">description</span><span>Document Workspace</span></a><a aria-current="page" class="flex items-center gap-3 px-3 py-2 rounded-lg transition-all bg-surface-container-highest text-primary font-semibold" data-path="library-and-recent" href="#"><span class="material-symbols-outlined text-[20px]">auto_stories</span><span>Library &amp; Recent</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="page-organizer" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span>Page Organizer</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="advanced-editor" href="#"><span class="material-symbols-outlined text-[20px]">edit_note</span><span>Advanced Editor</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="sign-and-protect" href="#"><span class="material-symbols-outlined text-[20px]">verified_user</span><span>Sign &amp; Protect</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="ocr-and-export" href="#"><span class="material-symbols-outlined text-[20px]">document_scanner</span><span>OCR &amp; Export</span></a></nav></div><div class="px-4 mt-4"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Storage Volumes</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="cloud-drives" href="#"><span class="material-symbols-outlined text-[20px]">cloud_done</span><span>Cloud Drives</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="local-vault" href="#"><span class="material-symbols-outlined text-[20px]">lock</span><span>Local Vault</span></a></nav></div></div><div class="p-4 bg-surface-container/60"><div class="p-3 rounded-xl bg-surface-container-lowest flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-on-primary font-headline font-semibold text-xs">FP</div><div class="flex flex-col"><span class="text-xs font-semibold text-on-surface font-headline leading-tight">Editorial Studio</span><span class="text-[10px] font-label text-tertiary font-bold uppercase tracking-wider">Pro Member</span></div></div><a class="text-on-surface-variant hover:text-primary transition-colors" data-path="preferences" href="#"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-28 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between"><div class="h-14 px-6 flex items-center justify-between border-b-0"><div class="flex items-center gap-2 overflow-x-auto"><div class="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-surface-container-high text-xs font-medium text-on-surface shadow-xs"><span class="material-symbols-outlined text-[16px] text-primary">picture_as_pdf</span><span class="font-label font-medium tracking-tight">Contract_Q3_Review.pdf</span><span class="w-1.5 h-1.5 rounded-full bg-primary"></span><span class="material-symbols-outlined text-[15px] text-on-surface-variant hover:text-error transition-colors cursor-pointer">close</span></div><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"><span class="material-symbols-outlined text-[16px]">article</span><span class="font-label">Scholar_Treatise_v4.pdf</span></div><div class="p-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span></div></div><div class="flex items-center gap-4"><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-xs text-on-surface-variant min-w-[220px]"><span class="material-symbols-outlined text-[16px]">search</span><span class="flex-1">Search text or tools...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-[10px] font-label font-bold text-secondary uppercase">⌘K</kbd></div><div class="flex items-center gap-1"><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">view_sidebar</span></button><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">fit_screen</span></button></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="h-14 px-6 flex items-center justify-between bg-surface-container-low/70"><div class="flex items-center gap-1.5"><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">pan_tool</span><span>Hand</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">near_me</span><span>Select</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">ink_highlighter</span><span>Highlight</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">comment</span><span>Note</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">draw</span><span>Ink</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">format_shapes</span><span>Add Text</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">signature</span><span>Stamp &amp; Sign</span></button></div><div class="flex items-center gap-3 text-xs font-label text-on-surface-variant"><div class="flex items-center gap-1 bg-surface-container-high px-2.5 py-1 rounded-lg"><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">remove</span></button><span class="font-medium text-[11px] px-1">125%</span><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">add</span></button></div><span class="text-[11px] text-secondary font-medium">Page 3 of 42</span><button class="p-1.5 hover:text-on-surface rounded-lg hover:bg-surface-container-high" type="button"><span class="material-symbols-outlined text-[18px]">fullscreen</span></button></div></div></header><main class="w-full pt-28 bg-surface"><div class="flex flex-col w-full px-8 py-8 space-y-8 select-none">
+<!-- Top Command & Action Bar -->
+<div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-2">
+<div class="space-y-2">
+<div class="flex items-center gap-2.5">
+<span class="text-[11px] font-label font-bold tracking-widest text-tertiary uppercase">Curated Catalog</span>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<span class="text-[11px] font-label text-secondary">Vol. IV • System Master</span>
+</div>
+<h1 class="font-headline text-3xl md:text-4xl text-on-surface font-semibold tracking-tight">
+        Document Library &amp; Workstation Hub
+      </h1>
+<p class="font-body text-sm text-on-surface-variant max-w-2xl leading-relaxed">
+        High-throughput archival repository, cryptographic validation engine, and multi-tenant editorial workspace.
+      </p>
+</div>
+<!-- Quick Utilities & Primary Action -->
+<div class="flex items-center flex-wrap gap-3">
+<!-- Search Input -->
+<div class="relative flex items-center min-w-[320px] bg-surface-container-lowest shadow-sm rounded-xl px-3.5 py-2.5">
+<span class="material-symbols-outlined text-[18px] text-secondary mr-2">search</span>
+<input class="w-full bg-transparent text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none font-body" placeholder="Search documents by name, content OCR, or metadata..." type="text"/>
+<kbd class="ml-2 px-1.5 py-0.5 rounded bg-surface-container text-[10px] font-label font-semibold text-secondary">⌘F</kbd>
+</div>
+<!-- Sort Dropdown -->
+<div class="relative">
+<button class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-surface-container-lowest text-xs font-label font-medium text-on-surface hover:bg-surface-container shadow-sm transition-all" type="button">
+<span class="material-symbols-outlined text-[16px] text-secondary">swap_vert</span>
+<span>Modified: Recent First</span>
+<span class="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
+</button>
+</div>
+<!-- View Toggle -->
+<div class="flex items-center p-1 rounded-xl bg-surface-container-lowest shadow-sm">
+<button class="p-1.5 rounded-lg bg-surface-container-high text-primary transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">grid_view</span>
+</button>
+<button class="p-1.5 rounded-lg text-secondary hover:text-on-surface transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">format_list_bulleted</span>
+</button>
+</div>
+<!-- Primary Action -->
+<button class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary text-xs font-label font-bold tracking-wide shadow-sm hover:opacity-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+<span>+ New Document</span>
+</button>
+</div>
+</div>
+<!-- Category Pill Tabs Bar -->
+<div class="flex items-center justify-between gap-4 overflow-x-auto pb-1">
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-highest text-primary font-label text-xs font-bold tracking-tight" type="button">
+<span>All Documents</span>
+<span class="px-1.5 py-0.5 rounded-md bg-surface-container-lowest text-[11px] text-primary font-semibold">184</span>
+</button>
+<button class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:text-on-surface font-label text-xs font-medium tracking-tight shadow-xs transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px] text-tertiary">star</span>
+<span>Starred</span>
+<span class="text-[11px] text-on-surface-variant">12</span>
+</button>
+<button class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:text-on-surface font-label text-xs font-medium tracking-tight shadow-xs transition-colors" type="button">
+<span>Shared with Me</span>
+<span class="text-[11px] text-on-surface-variant">29</span>
+</button>
+<button class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:text-on-surface font-label text-xs font-medium tracking-tight shadow-xs transition-colors" type="button">
+<span>Contracts &amp; Legal</span>
+<span class="text-[11px] text-on-surface-variant">48</span>
+</button>
+<button class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:text-on-surface font-label text-xs font-medium tracking-tight shadow-xs transition-colors" type="button">
+<span>Drafts &amp; Revisions</span>
+<span class="text-[11px] text-on-surface-variant">7</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:text-on-surface font-label text-xs font-medium tracking-tight shadow-xs transition-colors" type="button">
+<span>Archived</span>
+</button>
+</div>
+<!-- Machine Status Badge -->
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-container-low text-tertiary text-xs font-label font-semibold tracking-wide shrink-0">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-tertiary"></span>
+</span>
+<span>Neural Index v4.8 Active</span>
+</div>
+</div>
+<!-- Batch Suite Accelerator Cards (Horizontal Row) -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<span class="text-xs font-label font-bold uppercase tracking-wider text-secondary">
+        Batch Acceleration Suite
+      </span>
+<span class="text-[11px] font-label text-on-surface-variant">Wasm SIMD Accelerated</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+<!-- Batch Merge -->
+<div class="group p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-xs cursor-pointer flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[20px]">call_merge</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-primary transition-colors">arrow_forward</span>
+</div>
+<div class="mt-4">
+<div class="text-xs font-label font-bold text-on-surface group-hover:text-primary transition-colors">Batch Merge</div>
+<div class="text-[11px] text-secondary font-body mt-0.5">Stitch PDFs &amp; folios</div>
+</div>
+</div>
+<!-- Extract OCR -->
+<div class="group p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-xs cursor-pointer flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-tertiary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[20px]">document_scanner</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-tertiary transition-colors">arrow_forward</span>
+</div>
+<div class="mt-4">
+<div class="text-xs font-label font-bold text-on-surface group-hover:text-tertiary transition-colors">Extract OCR</div>
+<div class="text-[11px] text-secondary font-body mt-0.5">Multi-lang Latin 99.4%</div>
+</div>
+</div>
+<!-- Compress -->
+<div class="group p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-xs cursor-pointer flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[20px]">compress</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-primary transition-colors">arrow_forward</span>
+</div>
+<div class="mt-4">
+<div class="text-xs font-label font-bold text-on-surface group-hover:text-primary transition-colors">Compress</div>
+<div class="text-[11px] text-secondary font-body mt-0.5">Shrink up to 85% vector</div>
+</div>
+</div>
+<!-- Batch Sign -->
+<div class="group p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-xs cursor-pointer flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-tertiary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[20px]">verified</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-tertiary transition-colors">arrow_forward</span>
+</div>
+<div class="mt-4">
+<div class="text-xs font-label font-bold text-on-surface group-hover:text-tertiary transition-colors">Batch Sign</div>
+<div class="text-[11px] text-secondary font-body mt-0.5">Cryptographic certs</div>
+</div>
+</div>
+<!-- To Word / XLS -->
+<div class="group p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-xs cursor-pointer flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[20px]">transform</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-primary transition-colors">arrow_forward</span>
+</div>
+<div class="mt-4">
+<div class="text-xs font-label font-bold text-on-surface group-hover:text-primary transition-colors">To Word / XLS</div>
+<div class="text-[11px] text-secondary font-body mt-0.5">Retain formatting fidelity</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Active Sync Topology Widget -->
+<div class="p-5 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+<div class="flex flex-wrap items-center gap-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[22px]">cloud_sync</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-label font-bold text-on-surface">Sync Topology</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label font-bold text-tertiary uppercase">Active</span>
+</div>
+<div class="text-[11px] text-secondary font-body">Sub-second local replica mirroring</div>
+</div>
+</div>
+<div class="h-8 w-px bg-surface-container hidden md:block"></div>
+<!-- Sync Nodes -->
+<div class="flex items-center gap-4 text-xs font-label">
+<div class="flex items-center gap-1.5 text-on-surface">
+<span class="material-symbols-outlined text-[16px] text-primary">cloud_done</span>
+<span>iCloud Sync OK</span>
+</div>
+<div class="flex items-center gap-1.5 text-secondary">
+<span class="material-symbols-outlined text-[16px]">folder_shared</span>
+<span>Google Drive (18.4 GB)</span>
+</div>
+<div class="flex items-center gap-1.5 text-secondary">
+<span class="material-symbols-outlined text-[16px] text-tertiary">lock</span>
+<span>Local Vault (AES-256)</span>
+</div>
+</div>
+</div>
+<!-- Local Cache Quota progress -->
+<div class="flex items-center gap-4 min-w-[280px]">
+<div class="flex-1 space-y-1.5">
+<div class="flex justify-between text-[11px] font-label">
+<span class="text-secondary">Local Cache Quota</span>
+<span class="font-bold text-on-surface">4.1 GB <span class="text-secondary font-normal">/ 12.0 GB</span></span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 34%;"></div>
+</div>
+</div>
+<button class="p-2 rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container transition-colors" title="Storage Configuration" type="button">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</button>
+</div>
+</div>
+<!-- Main Document Grid: Contract & Product Library -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<h2 class="font-headline text-xl text-on-surface font-semibold tracking-tight">
+          Contract &amp; Product Library
+        </h2>
+<span class="text-xs font-label text-secondary">Showing 8 of 184 folios</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="text-xs font-label text-primary hover:underline font-semibold flex items-center gap-1" type="button">
+<span>Batch Operations</span>
+<span class="material-symbols-outlined text-[16px]">tune</span>
+</button>
+</div>
+</div>
+<!-- Bento / Grid Matrix -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+<!-- Card 1 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">gavel</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">PDF</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-primary font-label text-[10px] font-bold uppercase">Valid Sig</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-tertiary uppercase tracking-wider mb-1">
+<span>Legal Advisory</span>
+<span>•</span>
+<span>Priority Alpha</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Series_B_Shareholder_Agreement.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Amended liquidation preference clauses, investor signature packets, and board composition annexes.
+            </p>
+</div>
+<!-- Document Metadata Tags -->
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">32 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">4.8 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">AES-256</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-tertiary font-medium">OCR Ready</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated 14m ago</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Open Editor
+          </button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-tertiary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">ink_pen</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Sign</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-tertiary-fixed text-on-tertiary-fixed font-label text-[10px] font-bold uppercase">Needs eSign</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-tertiary uppercase tracking-wider mb-1">
+<span>Human Resources</span>
+<span>•</span>
+<span>Action Req</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Independent_Contractor_NDA.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Standard bilateral proprietary protection contract with EU GDPR non-disclosure schedules.
+            </p>
+</div>
+<!-- Document Metadata Tags -->
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">6 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">1.2 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-error font-medium">Pending 1 Sig</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-tertiary font-medium">OCR Ready</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated 2h ago</span>
+<button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-primary to-primary-container text-on-primary font-label text-xs font-bold hover:opacity-90 transition-all shadow-xs" type="button">
+            Sign Now
+          </button>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">terminal</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Spec</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-secondary font-label text-[10px] font-bold uppercase">In Review</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-secondary uppercase tracking-wider mb-1">
+<span>Engineering</span>
+<span>•</span>
+<span>Architecture</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Platform_Architecture_Spec.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Distributed vector store indexing pipeline, WebAssembly thread pooling, and schema blueprints.
+            </p>
+</div>
+<!-- Document Metadata Tags -->
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">84 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">18.6 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-primary font-medium">14 Annotations</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated yesterday</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Review
+          </button>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">lock</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Enc</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-tertiary font-label text-[10px] font-bold uppercase">Encrypted</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-tertiary uppercase tracking-wider mb-1">
+<span>Finance &amp; Audit</span>
+<span>•</span>
+<span>Vault Access</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Q3_Audited_Financial_Statement.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Comprehensive balance sheet audit, forensic tax footnotes, and accredited CPA verification seals.
+            </p>
+</div>
+<!-- Document Metadata Tags -->
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">58 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">7.9 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-error font-medium">Password</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-tertiary font-medium">OCR Ready</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated Oct 12</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Unlock
+          </button>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">clinical_notes</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">PDF</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-primary font-label text-[10px] font-bold uppercase">Archived</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-secondary uppercase tracking-wider mb-1">
+<span>Research</span>
+<span>•</span>
+<span>Whitepaper</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Neural_Document_Parsing_Algorithms.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Mathematical benchmarks of transformer-based OCR layout engines across multilingual legal corpora.
+            </p>
+</div>
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">112 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">24.2 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">BibTeX Attached</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated 3d ago</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Open Editor
+          </button>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-tertiary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">real_estate_agent</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Lease</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-primary font-label text-[10px] font-bold uppercase">Valid Sig</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-tertiary uppercase tracking-wider mb-1">
+<span>Operations</span>
+<span>•</span>
+<span>Real Estate</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Berlin_Studio_Master_Lease_Agreement.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Commercial tenant covenant, maintenance escalation schedules, and security deposit escrow protocols.
+            </p>
+</div>
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">24 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">3.5 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-tertiary font-medium">Certified Copy</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated Oct 04</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Open Editor
+          </button>
+</div>
+</div>
+<!-- Card 7 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">palette</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Asset</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-secondary font-label text-[10px] font-bold uppercase">Draft</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-secondary uppercase tracking-wider mb-1">
+<span>Brand Systems</span>
+<span>•</span>
+<span>Manual</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              Alexandria_Visual_Identity_Guidelines.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Chromatics, serif editorial scale hierarchies, micro-spacing grids, and vector symbol guidelines.
+            </p>
+</div>
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">42 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">36.1 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-primary font-medium">CMYK Ready</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated Sep 28</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Open Editor
+          </button>
+</div>
+</div>
+<!-- Card 8 -->
+<div class="group bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+<div class="space-y-4">
+<div class="flex items-start justify-between">
+<div class="w-12 h-14 rounded-xl bg-surface-container-high flex flex-col items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[24px]">verified_user</span>
+<span class="text-[9px] font-label font-bold uppercase mt-0.5">Audit</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded-md bg-surface-container-high text-primary font-label text-[10px] font-bold uppercase">Passed</span>
+<button class="p-1 text-secondary hover:text-on-surface rounded-lg" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-1.5 text-[10px] font-label font-bold text-secondary uppercase tracking-wider mb-1">
+<span>Security</span>
+<span>•</span>
+<span>Compliance</span>
+</div>
+<h3 class="font-headline text-base font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+              SOC2_Type_II_Compliance_Report.pdf
+            </h3>
+<p class="text-xs text-secondary font-body mt-1 line-clamp-2">
+              Third-party attestation of trust services principles, cryptographic controls, and key management.
+            </p>
+</div>
+<div class="flex flex-wrap gap-1.5 pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">96 pages</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-on-surface-variant">11.4 MB</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-[11px] font-label text-tertiary font-medium">Valid Seal</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between border-t-0 bg-surface-container-low/50 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+<span class="text-[11px] font-label text-secondary">Updated Sep 19</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary font-label text-xs font-bold hover:bg-primary hover:text-on-primary transition-colors" type="button">
+            Open Editor
+          </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Editorial Footnote & System Health Insight -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4 pb-20">
+<div class="p-5 rounded-2xl bg-surface-container-lowest shadow-sm space-y-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">psychology</span>
+<span class="text-xs font-label font-bold text-on-surface">Neural Semantic Search</span>
+</div>
+<p class="text-xs text-secondary font-body leading-relaxed">
+        Content indexing parses mathematical formulas, tabular footnotes, and vector path layers using on-device Wasm models. Search is zero-egress.
+      </p>
+<div class="pt-2 flex items-center justify-between text-[11px] font-label">
+<span class="text-secondary">Embeddings Cached: 1,489,120</span>
+<span class="text-primary font-bold">100% Synced</span>
+</div>
+</div>
+<div class="p-5 rounded-2xl bg-surface-container-lowest shadow-sm space-y-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-[20px]">enhanced_encryption</span>
+<span class="text-xs font-label font-bold text-on-surface">Cryptographic Authenticity</span>
+</div>
+<p class="text-xs text-secondary font-body leading-relaxed">
+        X.509 certificates and PKI signatures conform to PAdES-LTV (Long Term Validation) standards with RFC 3161 trusted timestamp authority.
+      </p>
+<div class="pt-2 flex items-center justify-between text-[11px] font-label">
+<span class="text-secondary">Hardware Key Token</span>
+<span class="text-tertiary font-bold">YubiKey HSM Attached</span>
+</div>
+</div>
+<div class="p-5 rounded-2xl bg-surface-container-lowest shadow-sm space-y-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">analytics</span>
+<span class="text-xs font-label font-bold text-on-surface">Batch Throughput Index</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-headline text-2xl font-bold text-on-surface">42.8 MB/s</span>
+<span class="text-xs font-label text-tertiary font-semibold">SIMD Parallel 8-Core</span>
+</div>
+<div class="w-full h-1.5 rounded-full bg-surface-container overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 78%;"></div>
+</div>
+<div class="flex justify-between text-[10px] font-label text-secondary pt-0.5">
+<span>Zero Page Drops</span>
+<span>Average Render Latency: 12ms</span>
+</div>
+</div>
+</div>
+<!-- Floating Glass Bottom Bar (Alexandria High-End Editorial Batch Suite) -->
+<div class="fixed bottom-6 left-80 right-8 z-30 flex items-center justify-between px-6 py-3.5 rounded-2xl bg-surface-container-lowest/85 backdrop-blur-xl shadow-[0_12px_40px_rgba(27,28,29,0.08)] border-0">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[18px]">bolt</span>
+</div>
+<div>
+<div class="text-xs font-label font-bold text-on-surface flex items-center gap-2">
+<span>Flux Quick Batch Ready</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-[10px] font-label text-secondary">3 Selected</span>
+</div>
+<div class="text-[11px] font-body text-secondary">Ready for batch extraction, cryptographic certification, or format compilation.</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container text-xs font-label font-semibold text-on-surface hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px] text-secondary">file_download</span>
+<span>Export All</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container text-xs font-label font-semibold text-on-surface hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px] text-secondary">compress</span>
+<span>Batch Compress</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary text-xs font-label font-bold shadow-xs hover:opacity-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[17px]">lock</span>
+<span>Encrypt Selected</span>
+</button>
+</div>
+</div>
+</div></main></div></body></html>

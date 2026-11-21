@@ -1,0 +1,155 @@
+//! Drives the real sandboxed worker process (`novapdf --pdf-worker`) over its
+//! stdin/stdout frame protocol, as the host does. Each test binary is its own
+//! process and PDFium loads only in the child, so this does not clash with the
+//! single in-process PDFium test in `pipeline.rs`.
+
+use std::io::{BufReader, BufWriter, Write};
+use std::path::PathBuf;
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+
+use novapdf_lib::protocol::{read_frame, write_frame};
+use serde_json::{Value, json};
+
+struct Worker {
+    child: Child,
+    stdin: BufWriter<ChildStdin>,
+    stdout: BufReader<ChildStdout>,
+}
+
+impl Worker {
+    fn start() -> Self {
+        let pdfium = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pdfium");
+        let mut child = Command::new(env!("CARGO_BIN_EXE_novapdf"))
+            .arg(novapdf_lib::worker::WORKER_FLAG)
+            .arg("--pdfium")
+            .arg(&pdfium)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("start worker");
+        let stdin = BufWriter::new(child.stdin.take().unwrap());
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        Worker { child, stdin, stdout }
+    }
+
+    fn raw(&mut self, header: &[u8], payload: &[u8]) -> (Value, Vec<u8>) {
+        write_frame(&mut self.stdin, header, payload).unwrap();
+        self.stdin.flush().unwrap();
+        let (h, p) = read_frame(&mut self.stdout).expect("worker replied");
+        (serde_json::from_slice(&h).expect("response header is JSON"), p)
+    }
+
+    fn call(&mut self, req: Value, payload: &[u8]) -> (Value, Vec<u8>) {
+        self.raw(&serde_json::to_vec(&req).unwrap(), payload)
+    }
+
+    fn ok(&mut self, req: Value, payload: &[u8]) -> (Value, Vec<u8>) {
+        let (resp, bytes) = self.call(req.clone(), payload);
+        assert_eq!(resp["status"], "ok", "{req} -> {resp}");
+        (resp["result"].clone(), bytes)
+    }
+
+    fn err(&mut self, req: Value, payload: &[u8]) -> String {
+        let (resp, bytes) = self.call(req.clone(), payload);
+        assert_eq!(resp["status"], "err", "{req} -> {resp}");
+        assert!(bytes.is_empty());
+        resp["message"].as_str().unwrap().to_string()
+    }
+}
+
+/// A one-page Letter PDF with two lines of Helvetica text.
+fn sample_pdf() -> Vec<u8> {
+    let content = "BT /F1 12 Tf 1 0 0 1 72 700 Tm (Hello worker) Tj 0 -40 Td (Second line) Tj ET";
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).into_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).into_bytes());
+    for off in offsets {
+        pdf.extend(format!("{off:010} 00000 n \n").into_bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).into_bytes());
+    pdf
+}
+
+fn helvetica() -> Value {
+    json!({"family": "Helvetica", "bold": false, "italic": false})
+}
+
+#[test]
+fn worker_speaks_the_frame_protocol() {
+    let mut w = Worker::start();
+
+    // Layout needs no document.
+    let (r, _) = w.ok(
+        json!({"op": "layout", "text": "one two three four five six", "font": helvetica(),
+               "size": 12, "width": 60, "indent": 0, "hScale": 1}),
+        &[],
+    );
+    let starts: Vec<u64> = r["lineStarts"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert!(starts.len() >= 2 && starts[0] == 0, "{r}");
+    assert!(starts.windows(2).all(|s| s[0] < s[1]));
+    // Validation happens in the worker too, not only in the Tauri command.
+    assert!(w.err(json!({"op": "layout", "text": "a\rb", "font": helvetica(), "size": 12, "width": null}), &[])
+        .contains("not normalised"));
+
+    // Open, then use the document.
+    let (pages, _) = w.ok(json!({"op": "open", "docId": 1}), &sample_pdf());
+    assert_eq!(pages, json!([{"width": 612.0, "height": 792.0}]));
+
+    let (text, _) = w.ok(json!({"op": "extract", "docId": 1, "pageIndex": 0}), &[]);
+    let paras: Vec<&str> = text["paragraphs"].as_array().unwrap().iter().map(|p| p["text"].as_str().unwrap()).collect();
+    assert!(paras.contains(&"Hello worker"), "{paras:?}");
+    assert!(paras.contains(&"Second line"), "{paras:?}");
+    assert_eq!(text["width"], 612.0);
+
+    let (r, png) = w.ok(
+        json!({"op": "render", "docId": 1, "pageIndex": 0, "width": 200, "format": "png",
+               "edits": null, "watermark": null}),
+        &[],
+    );
+    assert!(r.is_null());
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+
+    let (scan, _) = w.ok(json!({"op": "findWatermarks", "docId": 1, "text": null}), &[]);
+    assert_eq!(scan, json!({"pages": [], "markedObjects": 0, "annotations": 0, "matchingText": 0}));
+
+    let (r, saved) = w.ok(
+        json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0, "rotation": 90}],
+               "watermark": null, "sanitize": true}),
+        &[],
+    );
+    assert!(saved.starts_with(b"%PDF-"));
+    assert_eq!(r["warnings"], json!([]));
+
+    // Errors are reported, and the worker keeps serving afterwards.
+    assert_eq!(w.err(json!({"op": "extract", "docId": 99, "pageIndex": 0}), &[]), "Document is not open");
+    assert!(!w.err(json!({"op": "extract", "docId": 1, "pageIndex": 7}), &[]).is_empty());
+    assert!(!w.err(json!({"op": "open", "docId": 2}), b"not a pdf").is_empty());
+    let (resp, _) = w.raw(b"{not json", &[]);
+    assert_eq!(resp["status"], "err");
+    assert!(resp["message"].as_str().unwrap().starts_with("Bad request"), "{resp}");
+    assert!(w.err(json!({"op": "save", "pages": [], "watermark": null, "sanitize": false}), &[])
+        .contains("no pages"));
+
+    // Close drops the document.
+    let (r, _) = w.ok(json!({"op": "close", "docId": 1}), &[]);
+    assert!(r.is_null());
+    assert_eq!(w.err(json!({"op": "extract", "docId": 1, "pageIndex": 0}), &[]), "Document is not open");
+
+    // Closing stdin ends the worker cleanly.
+    drop(w.stdin);
+    let status = w.child.wait().unwrap();
+    assert!(status.success(), "worker exit status {status:?}");
+}

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="80 80 864 864" width="1024" height="1024">
+  <defs>
+    <linearGradient id="pn" gradientUnits="userSpaceOnUse" x1="380" y1="290" x2="650" y2="740">
+      <stop offset="0" stop-color="#FEE2E2"/><stop offset=".5" stop-color="#F87171"/><stop offset="1" stop-color="#DC2626"/>
+    </linearGradient>
+    <clipPath id="pc"><rect x="100" y="100" width="824" height="824" rx="190"/></clipPath>
+    <filter id="pg" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="70"/></filter>
+    <filter id="pb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="20"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="190" fill="#13111A"/>
+  <g clip-path="url(#pc)"><circle cx="330" cy="280" r="300" fill="#EF4444" opacity=".45" filter="url(#pg)"/></g>
+  <rect x="100" y="100" width="824" height="824" rx="190" fill="none" stroke="#FCA5A5" stroke-opacity=".55" stroke-width="10"/>
+  <path d="M608 216 H340 Q296 216 296 260 V764 Q296 808 340 808 H684 Q728 808 728 764 V336 Z" fill="none" stroke="#FCA5A5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>
+  <path d="M418 700L418 330L606 700L606 330" fill="none" stroke="url(#pn)" stroke-width="80" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="668" cy="262" r="56" fill="#FCA5A5" opacity=".5" filter="url(#pb)"/>
+  <path transform="translate(668 262) scale(58)" fill="#FFFFFF" d="M0,-1 C.1,-.29 .29,-.1 1,0 .29,.1 .1,.29 0,1 -.1,.29 -.29,.1 -1,0 -.29,-.1 -.1,-.29 0,-1 Z"/>
+</svg>

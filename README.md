@@ -1,0 +1,122 @@
+# NovaPDF
+
+Desktop PDF editor: organise pages (reorder, rotate, delete, merge), edit existing text,
+add text boxes, and add or remove watermarks. Built with Tauri 2, Rust and native PDFium,
+with a React + TypeScript UI.
+
+The original Electron + PDFium-WASM spec is kept in [docs/original-spec.md](docs/original-spec.md);
+see "Why this differs from the original spec" below.
+
+## Run it
+
+Prerequisites: Node 20+, Rust (stable), and on Windows the VS C++ Build Tools and WebView2.
+
+```bash
+npm install          # also downloads the pinned PDFium build into src-tauri/pdfium/
+npm run tauri dev    # run the app
+npm run tauri build  # installer in src-tauri/target/release/bundle/
+npm run test:rust    # unit tests + end-to-end pipeline test against real PDFium
+npm run typecheck
+npm run test:all     # typecheck, UI + Rust coverage gates, E2E against the real app
+```
+
+See [TESTING.md](TESTING.md) for the test layers, coverage gates and where new tests go.
+
+`npm run setup:pdfium -- --force` re-downloads PDFium. The release is pinned in
+`scripts/fetch-pdfium.mjs` to the build that `pdfium-render`'s `pdfium_8125` feature targets.
+Bump both together.
+
+## Features
+
+| Area | What it does |
+|---|---|
+| Pages | Thumbnails, multi-select (Ctrl/Shift), drag to reorder, rotate (R / Shift+R), delete, merge more PDFs (button or drop files on the window), undo/redo |
+| Edit text | Click a paragraph → edit inline. Lines are grouped into paragraphs (columns and tables are kept apart). The edited paragraph is re-typeset with wrapping and alignment |
+| Add text | Text boxes with font, size, colour, bold/italic, alignment, line height and wrap width. Drag to move |
+| Watermark | Text watermark on every page (font, size, colour, opacity, angle), written as a real PDF object tagged `/Artifact /Watermark` |
+| Remove watermarks | Finds tagged watermark artifacts, watermark annotations, and, given the text, untagged watermark text (fragments only when rotated or transparent, so body text is never touched) |
+| Save | Builds a new PDF with PDFium. Unchanged pages are copied untouched (vector, links, annotations kept); the "Sanitize" option removes risky annotations |
+
+Every preview is the real PDFium render of the edited page, so what you see is what is saved.
+
+## Architecture
+
+```
+React UI (WebView)          Rust app process                 PDF worker processes (same exe, --pdf-worker)
+------------------          ----------------                 ----------------------------------------------
+no file access     invoke   commands.rs: dialogs, grants,    worker/  PDFium (C API via pdfium-render bindings)
+blob: page images  ------>  host.rs: worker pool, timeouts,  -------> extract.rs  text → lines → paragraphs
+edit model (JSON)           restart, doc bytes kept in RAM   stdin/   edit.rs     layout, text objects,
+                                                             stdout   watermark, sanitize, render, save
+```
+
+* **Edits are data.** A page's edits are `{ removedObjects, removedAnnots, blocks }` (see
+  `src-tauri/src/protocol.rs`). Source documents are never modified. Rendering an edited page
+  copies that page into a scratch document and applies the edits; saving does the same into
+  a fresh document. Undo/redo is just UI state.
+* **Worker pool.** Worker 0 handles interactive work (page view, text extraction, save), and
+  the others render thumbnails, so a 500-page thumbnail flood never blocks the editor.
+  Workers load documents lazily from bytes the host keeps, so a crashed worker is replaced
+  transparently.
+* **Fonts.** Embedded PDF fonts are not reused: they are usually subsets and may not be
+  re-embeddable. New text uses a standard-14 font when the family matches and the text is
+  WinAnsi (nothing embedded). Otherwise it uses an installed TrueType font that covers every
+  character, embedded in full; Vietnamese, for example, takes this path.
+
+## Security model
+
+PDF is a hostile format, so untrusted bytes are parsed only in the worker:
+
+* **Process isolation.** PDFium runs in separate worker processes. A crash or a hang (render
+  30 s, extract 30 s, save 300 s timeouts) kills only that worker; the app restarts it.
+* **Windows sandbox.** Each worker runs in its own Job Object: 3 GB memory cap, no child
+  processes, UI restrictions, and it is killed with the app. It drops to **Low integrity**
+  (no writes to user files or the registry) and enables mitigations: no dynamic code, no
+  extension-point DLLs, no remote or low-label image loads, strict handle checks. The
+  environment is cleared, and the worker never touches the file system for documents (bytes
+  in, bytes out over pipes).
+* **No PDF JavaScript.** The bundled PDFium build has no V8/XFA, and no form-fill environment
+  is created.
+* **Output.** Saving builds a new document page by page, so document-level JavaScript,
+  OpenAction, embedded files and XFA are never copied. With *Sanitize* on (the default), link
+  annotations with JavaScript, Launch or remote actions and non-http(s)/mailto URIs are
+  removed, as are file-attachment, sound, movie, screen, rich-media and 3D annotations.
+* **UI has no file access.** Open and save dialogs run in Rust. Dropped files are recorded
+  as one-time grants by the native drop handler before the UI hears about them. The UI
+  capability set has no fs or dialog open/save permissions. A strict CSP is set, and
+  navigation away from the app is blocked.
+* **Bounded inputs.** 512 MB file limit with a `%PDF-` header check, bounded IPC frames,
+  render size caps, validated edit geometry and text lengths. Worker output is checked
+  (images must be PNG/JPEG, saves must start with `%PDF-`) before use.
+* **Atomic saves.** Output is written to a temporary file and renamed over the target.
+
+## Known limitations
+
+* Editing a paragraph applies one style to it (a warning is shown for mixed styles), drops
+  first-line indents and justification, and reflows with the substituted font, so line
+  breaks can differ slightly from the original.
+* Text inside Form XObjects, rotated text and invisible OCR text are not editable as
+  paragraphs (rotated text can still be deleted).
+* Page-level `/AA` actions cannot be removed through PDFium's API. Copied form widgets keep
+  their appearance but lose the AcroForm dictionary.
+* Password-protected PDFs are rejected.
+* The OS sandbox is Windows-only so far. On macOS and Linux the worker is still isolated
+  with timeouts and restart; add the App Sandbox or seccomp/landlock before shipping there.
+* The page editor shows pages in their original orientation; the app-level rotation is
+  applied on save and in thumbnails.
+
+## Why this differs from the original spec
+
+| Spec | Here | Reason |
+|---|---|---|
+| Electron + PDFium WASM | Tauri 2 + native PDFium | ~20 MB vs ~150 MB, no WASM heap limit, and OS-level sandboxing of the parser |
+| Strip text, render the background to canvas, overlay HTML, export via `printToPDF` | Edit the PDF itself with PDFium page objects | `printToPDF` would rasterise every page and drop links, forms, bookmarks and metadata |
+| Reuse extracted embedded fonts in `FontFace` | Standard-14 or installed TrueType | Subset/CFF/Type1 fonts can't render newly typed characters or be re-embedded |
+| TipTap/Lexical rich text | Plain text per paragraph with block-level style | Smaller attack surface; per-run styling is a possible next step |
+
+## Developer notes
+
+* `NOVAPDF_INSPECT=file.pdf cargo test --manifest-path src-tauri/Cargo.toml --test inspect -- --ignored --nocapture`
+  prints the paragraphs PDFium sees and writes `target/inspect-N.png`.
+* Debug builds only: `NOVAPDF_DEV_OPEN="a.pdf;b.pdf"` pre-grants files as if dropped, for
+  scripted UI tests (drive the WebView via `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).

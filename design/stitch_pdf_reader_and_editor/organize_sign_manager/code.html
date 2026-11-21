@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base { html, body { margin: 0; padding: 0; } body { overscroll-behavior: none; } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-secondary-container": "#fefcff", "primary-fixed": "#e2dfff", "surface-bright": "#faf8ff", "inverse-surface": "#283044", "primary-container": "#4f46e5", "secondary": "#0051d5", "on-error": "#ffffff", "surface-container-low": "#f2f3ff", "on-tertiary-fixed": "#002114", "on-secondary-fixed": "#00174b", "primary-fixed-dim": "#c3c0ff", "secondary-fixed": "#dbe1ff", "secondary-fixed-dim": "#b4c5ff", "surface-variant": "#dae2fd", "on-tertiary": "#ffffff", "on-background": "#131b2e", "on-primary": "#ffffff", "tertiary-container": "#006e4c", "on-primary-container": "#dad7ff", "surface-container-lowest": "#ffffff", "on-tertiary-container": "#7df1bd", "error-container": "#ffdad6", "surface-container-high": "#e2e7ff", "tertiary-fixed-dim": "#68dba9", "on-secondary": "#ffffff", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#003ea8", "tertiary": "#005338", "inverse-primary": "#c3c0ff", "surface-container": "#eaedff", "secondary-container": "#316bf3", "background": "#faf8ff", "surface-container-highest": "#dae2fd", "on-surface-variant": "#464555", "surface-dim": "#d2d9f4", "outline-variant": "#c7c4d8", "inverse-on-surface": "#eef0ff", "on-primary-fixed": "#0f0069", "tertiary-fixed": "#85f8c4", "error": "#ba1a1a", "on-primary-fixed-variant": "#3323cc", "surface-tint": "#4d44e3", "primary": "#3525cd", "on-surface": "#131b2e", "on-tertiary-fixed-variant": "#005137", "surface": "#faf8ff", "outline": "#777587" }, "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, "spacing": { "space-xl": "1.5rem", "margin": "0.75rem", "space-md": "0.75rem", "margin-sm": "0.5rem", "space-lg": "1rem", "gutter-lg": "1rem", "space-sm": "0.5rem", "space-xs": "0.25rem", "margin-lg": "1.25rem", "gutter-sm": "0.5rem", "gutter": "0.75rem" }, "fontFamily": { "title-md": ["Inter"], "label-sm": ["JetBrains Mono"], "label-xs": ["JetBrains Mono"], "title-sm": ["Inter"], "label-md": ["JetBrains Mono"], "body-sm": ["Inter"], "display-lg": ["Hanken Grotesk"], "display-md": ["Hanken Grotesk"], "body-md": ["Inter"], "headline-sm": ["Hanken Grotesk"] }, "fontSize": { "title-md": ["15px", { "lineHeight": "20px", "letterSpacing": "-0.005em", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "500" }], "label-xs": ["10px", { "lineHeight": "12px", "letterSpacing": "0.04em", "fontWeight": "500" }], "title-sm": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "600" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "body-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.005em", "fontWeight": "400" }], "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "display-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }], "body-md": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }] } } } };</script></head><body class="bg-surface font-body-md text-on-surface"><header class="fixed top-0 left-0 right-0 z-50 bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-10 px-margin flex items-center justify-between gap-gutter bg-surface-container-low"><div class="flex items-center gap-space-sm"><img alt="Folio PDF Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ALJJyrDQKRN1kLbgqz99Ut1lACcIbr9BKNqqptjsSKQKUf5TxDiCIYABDyUex6j4ZECEV9Np94C3P1wgVE6s9oIP59q3tNnZpu8nS9HCE7gGeH-sYL1ucUzrQmLLzRuwmSk5h_UqyuwLYMUMQ63ozLW_mbSV-KPjcpJjDpolXROzXZ8relh9Ir49jPyntyFmxYc1rcMQ9INkNxnLHg5bSakJUlUi2ruV_T_FZJeu1Qe8DzQHBg"/><span class="font-title-sm text-title-sm text-on-surface">Folio PDF</span></div><div class="flex items-center gap-space-xs overflow-x-auto flex-1 max-w-2xl px-space-md"><div class="flex items-center gap-space-xs px-space-md py-space-xs bg-surface-container-lowest rounded-lg shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] text-on-surface"><span class="material-symbols-outlined text-secondary text-sm">description</span><span class="font-label-sm text-label-sm">Q3_Financial_Review.pdf</span><span class="material-symbols-outlined text-xs hover:text-error cursor-pointer">close</span></div><div class="flex items-center gap-space-xs px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container rounded-lg cursor-pointer"><span class="material-symbols-outlined text-sm">description</span><span class="font-label-sm text-label-sm">SaaS_Agreement_v4.pdf</span><span class="material-symbols-outlined text-xs hover:text-error">close</span></div><button class="flex items-center gap-space-xs px-space-sm py-space-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-sm">add</span><span class="font-label-xs text-label-xs">New Document</span></button></div><div class="flex items-center gap-space-md"><div class="hidden md:flex items-center gap-space-xs px-space-sm py-space-xs bg-tertiary-fixed text-on-tertiary-fixed rounded-full"><span class="material-symbols-outlined text-xs">cloud_done</span><span class="font-label-xs text-label-xs">Synced to Cloud</span></div><div class="flex items-center gap-space-xs"><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined text-sm">undo</span></button><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined text-sm">redo</span></button></div><div class="flex items-center gap-space-xs bg-surface-container-lowest px-space-xs py-space-xs rounded-lg"><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded"><span class="material-symbols-outlined text-xs">remove</span></button><span class="font-label-xs text-label-xs px-space-xs">100%</span><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded"><span class="material-symbols-outlined text-xs">add</span></button></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmG4pokXweoqGSxyS1rx_E-NWlQyN1t5XnzfXMb8ACFZaVGdbJoScfePzsQt8Aqf6kU0eYBxpPPVMgF7tBmsoKOtlVCSpwnDIdb8dURxnNd0_PwLfYKwROtFpPRCGl5PIbIczgwnsZlDRq4CkhkdELMDRHrWJouAGokOQR6KvG-LBngZ3cXdSJYRJRH4_GXTa_wQKEjJkWMqd2Dy82g4daljWsOGqOaIukLW5JzmR0"/></div></div><div class="h-11 px-margin flex items-center justify-between bg-surface-container-lowest shadow-[0_1px_4px_rgba(0,0,0,0.02)]"><nav class="flex items-center gap-space-xs" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg shadow-sm"><a class="px-space-md py-space-xs font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors" data-path="library-hub" href="#">Library & Hub</a><a class="px-space-md py-space-xs font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors" data-path="reader-markup" href="#">Reader & Markup</a><a class="px-space-md py-space-xs font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors" data-path="advanced-editor" href="#">Advanced Editor</a><a class="px-space-md py-space-xs font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors" data-path="organize-sign" href="#">Organize & Sign</a></nav><div class="flex items-center gap-space-md"><div class="relative flex items-center w-64 bg-surface-container-low rounded-lg px-space-sm py-space-xs"><span class="material-symbols-outlined text-outline text-sm mr-space-xs">search</span><input class="w-full bg-transparent font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none" placeholder="Search document or actions..." type="text"/><kbd class="font-label-xs text-label-xs bg-surface-container-lowest text-on-surface-variant px-space-xs py-0.5 rounded shadow-sm">⌘K</kbd></div><div class="flex items-center gap-space-xs"><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined text-sm">tune</span></button><button class="p-space-xs text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined text-sm">share</span></button></div></div></div></header><aside class="fixed left-0 top-21 h-[calc(100vh-5.25rem)] w-64 bg-surface-container-lowest shadow-[1px_0_4px_rgba(0,0,0,0.02)] z-40 flex flex-col justify-between py-space-md px-space-sm"><div class="flex flex-col gap-space-sm"><div class="px-space-sm py-space-xs flex items-center justify-between"><span class="font-label-xs text-label-xs uppercase tracking-wider text-outline">Workspace Panes</span><span class="material-symbols-outlined text-sm text-outline cursor-pointer">dock_to_left</span></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary rounded-lg"><a class="flex items-center gap-space-sm px-space-sm py-space-sm font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all" data-path="page-thumbnails" href="#"><span class="material-symbols-outlined text-sm">view_sidebar</span><span>Page Thumbnails</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all" data-path="bookmarks-outline" href="#"><span class="material-symbols-outlined text-sm">bookmark</span><span>Bookmarks & Outline</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all" data-path="annotations-comments" href="#"><span class="material-symbols-outlined text-sm">rate_review</span><span>Annotations & Notes</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all" data-path="form-fields" href="#"><span class="material-symbols-outlined text-sm">edit_square</span><span>Interactive Fields</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all" data-path="digital-signatures" href="#"><span class="material-symbols-outlined text-sm">draw</span><span>Signatures & Certs</span></a></nav></div><div class="p-space-sm bg-surface-container-low rounded-xl"><div class="flex items-center justify-between mb-space-xs"><span class="font-label-xs text-label-xs text-outline">Local Storage</span><span class="font-label-xs text-label-xs font-bold text-on-surface">14.2 GB / 50 GB</span></div><div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary-container w-[28%]"></div></div></div></aside><div class="pl-64"><main class="relative pt-21 min-h-screen bg-surface w-full px-8"><div class="flex flex-col w-full">
+<!-- Secondary Action Toolbar: Mode Switch & Page Manipulation Strip -->
+<div class="sticky top-21 z-30 flex flex-wrap items-center justify-between gap-space-sm bg-surface-container-lowest px-space-lg py-space-sm shadow-sm rounded-xl mb-space-md">
+<!-- Mode Segments -->
+<div class="flex items-center gap-space-xs bg-surface-container-low p-space-xs rounded-lg">
+<button class="flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm bg-primary-container text-on-primary shadow-sm transition-all" id="mode-organize">
+<span class="material-symbols-outlined text-sm">auto_stories</span>
+<span>Organize Pages</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all" id="mode-signature">
+<span class="material-symbols-outlined text-sm">draw</span>
+<span>Prepare for Signature</span>
+<span class="bg-secondary-fixed text-on-secondary-fixed font-label-xs text-label-xs px-1.5 py-0.5 rounded-full font-bold">2 Slots</span>
+</button>
+</div>
+<!-- Active Selection Counter -->
+<div class="flex items-center gap-space-xs bg-primary-fixed text-on-primary-fixed px-space-md py-1.5 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+<span class="font-label-sm text-label-sm font-semibold">3 of 16 Pages Selected</span>
+<button class="ml-space-xs text-on-primary-fixed-variant hover:text-on-primary-fixed font-label-xs text-label-xs underline">Clear</button>
+</div>
+<!-- Action Toolset -->
+<div class="flex items-center gap-space-xs overflow-x-auto">
+<button class="p-space-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors flex items-center gap-1 font-label-xs text-label-xs px-2 py-1.5" title="Rotate Left 90°">
+<span class="material-symbols-outlined text-sm">rotate_left</span>
+<span>Rotate 90°L</span>
+</button>
+<button class="p-space-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors flex items-center gap-1 font-label-xs text-label-xs px-2 py-1.5" title="Rotate Right 90°">
+<span class="material-symbols-outlined text-sm">rotate_right</span>
+<span>Rotate 90°R</span>
+</button>
+<div class="w-px h-5 bg-surface-container-highest mx-0.5"></div>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-lg font-label-xs text-label-xs transition-colors">
+<span class="material-symbols-outlined text-sm">file_download</span>
+<span>Extract (3)</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-error-container text-on-error-container hover:bg-opacity-80 rounded-lg font-label-xs text-label-xs font-semibold transition-colors">
+<span class="material-symbols-outlined text-sm">delete</span>
+<span>Delete Selected</span>
+</button>
+<div class="w-px h-5 bg-surface-container-highest mx-0.5"></div>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-lg font-label-xs text-label-xs transition-colors">
+<span class="material-symbols-outlined text-sm">add_to_photos</span>
+<span>Insert / Merge</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-lg font-label-xs text-label-xs transition-colors">
+<span class="material-symbols-outlined text-sm">call_split</span>
+<span>Split</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-lg font-label-xs text-label-xs transition-colors">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+<span>Duplicate</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm py-1.5 bg-tertiary-fixed text-on-tertiary-fixed hover:bg-opacity-90 rounded-lg font-label-xs text-label-xs font-semibold transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">document_scanner</span>
+<span>Auto-Deskew & OCR</span>
+</button>
+</div>
+</div>
+<!-- Primary Canvas Grid & Operations Inspector Split -->
+<div class="flex gap-space-lg w-full items-start relative pb-28">
+<!-- 4x4 Grid of Pages (with dynamic visual cards, drag state, and annotations) -->
+<div class="flex-1 flex flex-col gap-space-md">
+<!-- Grid Canvas Header -->
+<div class="flex items-center justify-between px-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-sm text-headline-sm text-on-surface">Page Layout Workspace</span>
+<span class="font-label-xs text-label-xs bg-surface-container px-2 py-0.5 rounded text-on-surface-variant">Default: US Letter (8.5 × 11")</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-label-xs text-label-xs text-outline">Layout density:</span>
+<div class="flex bg-surface-container-low p-0.5 rounded-lg">
+<button class="px-2 py-0.5 bg-surface-container-lowest text-on-surface rounded shadow-sm font-label-xs text-label-xs">Compact (4×4)</button>
+<button class="px-2 py-0.5 text-on-surface-variant hover:text-on-surface font-label-xs text-label-xs">Standard (3×3)</button>
+</div>
+</div>
+</div>
+<!-- 4x4 Document Page Matrix -->
+<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-space-md">
+<!-- Page 01 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Cover page of a formal corporate annual report titled Q3 Financial Review, crisp minimalist typography, navy blue primary header block, structured executive summary paragraph text, light gray subtle data tables, high resolution document scan aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDO7li1ElN0EhtDkMrfhh8azrVFZPy3uOJBbXPIUcmin_UwBcHPoAoCfcOxKreS391mXAxxHrj0UIRDvfVQPJLVoetJCCL2MzA2HPpZbclGo8Hd992Xg-ure68yb3jAkwmvMAA5DJRwWbiL5Hy4q3hQ4ZG65qbYiu-wmJaXHbDXbph--wSdZo80kSTTffIRkguapX95VLs2wCC3pZ62s_8OP-gLH7Q8l5FiBj4hV995"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 01</span>
+<span class="font-label-xs text-label-xs text-outline">Cover Sheet</span>
+</div>
+</div>
+<!-- Page 02: SELECTED -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-md ring-2 ring-primary-container transition-all overflow-hidden">
+<div class="relative bg-primary-fixed/20 aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="High resolution legal balance sheet with multi-column monetary data, bold line items, corporate net revenue charts, subtle grid lines, clean modern financial typography on clean white paper background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBu-kff4vSyDoSXvTjKR0iaFJ_5akqE_XGB9yZSVY1WfusKz-pFEQcve93P8HA5BCWcaGNWyzvge8v7Da00YZ3mhSGF30cM0dZSTIA2rfg8x9Ay83Ql4_yp7AFGDjJj9g8pLgRC31MkOg97Fq32kLRNTIz6U8WEpPtu0HFiILnGaFw8hn39QHQeOtWoEC5Sg1df1FGk5Yw6CHXCCVuAJE7Ls7qKwc46uUB1bpIMtEMF"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-primary-container text-on-primary rounded shadow-sm cursor-pointer">
+<span class="material-symbols-outlined text-xs">check</span>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-primary-container text-on-primary">
+<span class="font-label-sm text-label-sm font-bold">Page 02</span>
+<span class="font-label-xs text-label-xs font-medium">Selected</span>
+</div>
+</div>
+<!-- Page 03: SELECTED -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-md ring-2 ring-primary-container transition-all overflow-hidden">
+<div class="relative bg-primary-fixed/20 aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Corporate cash flow statement page from a financial prospectus, featuring structured tables, quarter by quarter performance metrics, and signed auditor stamp footer." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgSsrgVfGu810AQHaB2nxWScAuHuIeYEaFusn-KIeL494dW_HXhJe7ANXOAIzVv7lsIDAA2PSKIuLC4wFpc6xGB_I9tMZUfPa5Nu08TvxdLJKv3wVvgBAqY5NPq6GbhRDXpLVbXtVToPtkj7ex5N8A2V8RseSTstqovWJgjwJ2FO0Ii9tTJdVcMb_cmVOgWD7HjMyk3xUvNVsX0bh0W8Any3zi7tr_exXbW4eiOnqX"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-primary-container text-on-primary rounded shadow-sm cursor-pointer">
+<span class="material-symbols-outlined text-xs">check</span>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-primary-container text-on-primary">
+<span class="font-label-sm text-label-sm font-bold">Page 03</span>
+<span class="font-label-xs text-label-xs font-medium">Selected</span>
+</div>
+</div>
+<!-- Page 04 with active drag indicator on the right edge -->
+<div class="relative group">
+<div class="flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Technical market segmentation bar charts and vector diagrams in monochrome and indigo palette on clean crisp documentation paper." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQMgfVIjMpqfIQ879_HApj8_ac8SB0QfUUOc5K3VDD-2gR1tdVECM86ZWzCaFaTJ8m6b9zY6nImWYiwdsUUkzevWe_w0J26PVX8qlRXsz0AwVcoGjFvPLxspwLqayJEchh8ktzmyWFlYOik1GF9BW6EGF2soqz5_I0bf7jbXWuqBI22T5WjMYp6qtB6AUJ7SqgPpUn8YNhikOfnnOg50bKYrZRHqI58t6BtD3lNj9I"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 04</span>
+<span class="font-label-xs text-label-xs text-outline">Analytics</span>
+</div>
+</div>
+<!-- Drag-and-drop indicator ghost insertion line between Page 04 & 05 -->
+<div class="absolute -right-3 top-0 bottom-0 w-1.5 flex flex-col items-center justify-center z-20 pointer-events-none">
+<div class="w-3 h-3 rounded-full bg-primary -mb-1 shadow"></div>
+<div class="w-1 h-full bg-primary shadow-sm rounded-full"></div>
+<div class="w-3 h-3 rounded-full bg-primary -mt-1 shadow"></div>
+</div>
+</div>
+<!-- Page 05 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden opacity-90">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Dense terms of service document page with small legal clause paragraphs, section headings 4.1 through 4.9, subtle margins, high precision PDF preview." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAL2PiHYdKYZbgK85uWYlD4pluuV0VCkkK7ax0CozCGM95fc-2DpkJMqAkVKJ_NR65Lkv3TlK3BS6ByAqFwp7Tfm08gJBqfwhPu_Qsb2yB6LRUBkIfh37voJ6Uhu9YHSt6Yegr29TLBk0UFRr0btblhUnFLq6P1_CJWtsfbx0jz1Z6piYaknGs5zz2HcfFwWroqIcAMZd5HJpBi5-OjqRl3XStivEgK7BjA_R9PceZH"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 05</span>
+<span class="font-label-xs text-label-xs text-outline">T&C Scope</span>
+</div>
+</div>
+<!-- Page 06: HAS FORM FIELDS BADGE -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Commercial invoice and order requisition form featuring interactive blank input boxes, checkboxes, billing address sections, clean PDF form design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5LUJ7dLVUaoRFL2M78hrQr0z3V9eNVwkgMY1xN4ZWzYZPQu3FTRpZHjJ6i7T0TfaUxNMb1qbF8_VU5nV5SlUeDY2MsWSw6WCCKOiFkp4BIQm4XJPjJpfoNyJLp7RvOZOO6aJXiOSccq8s7k3T3-XVZWglEiXxKnhR1AivIzG-hSN5x_7N_7cfpcn6dIK4j7etsttxL4Vk25rzzzInJKJHZXyidB_ZqMfADGYomfHV"/>
+<!-- Form badge indicator -->
+<div class="absolute top-2 right-2 z-10 flex items-center gap-1 bg-surface-container-lowest/95 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm text-secondary">
+<span class="material-symbols-outlined text-xs">edit_note</span>
+<span class="font-label-xs text-label-xs font-semibold">Has Form Fields</span>
+</div>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 06</span>
+<span class="font-label-xs text-label-xs text-outline">Requisition</span>
+</div>
+</div>
+<!-- Page 07: SELECTED -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-md ring-2 ring-primary-container transition-all overflow-hidden">
+<div class="relative bg-primary-fixed/20 aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Corporate governance policy chart with executive hierarchy diagram, organogram tree structures, and compliance department approvals on formal paper sheet." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlxi79ABQ3hm7NOQG1__B-CMcqnFzqNIBDBHXEMxSshd-a_j1YKq_YlIRBRv6wYFv8oUZTlbRYU1MFKZh9U8H2JCFg-5jP1i56RJC56MABNNGpUguvODXJ3MKeI5R8owI1fanTeGMtIzfs_cwpEk_NoU6dctWY_kgox-P5fqqAA_3ybn2bKf9VzP5lsaIIPR5fZmdQ32dyx5YoNacZqEqaa5pIWAyg4hGtOJeFU8RH"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-primary-container text-on-primary rounded shadow-sm cursor-pointer">
+<span class="material-symbols-outlined text-xs">check</span>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-primary-container text-on-primary">
+<span class="font-label-sm text-label-sm font-bold">Page 07</span>
+<span class="font-label-xs text-label-xs font-medium">Selected</span>
+</div>
+</div>
+<!-- Page 08: AMBER SIGNATURE REQUIRED FLAG -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Legal closing contract document with dotted signature lines, formal witness acknowledgment blocks, and seal placeholders on crisp business document." src="https://lh3.googleusercontent.com/aida-public/AB6AXuADJBRbChzH4JrV8QTz7TPolspLJiJZwuTN5FA4zwNC3pXc-u8g6VJjsGLdPB_JTzWOBAOpZu2ML8aYdJPKpo1IWzL1oEK4xS3z7b67GMuUedCQaJYlEM0SvvnuC_CP6xfJMImx4kjIAFINbwwQrixMJOJi3JRnWOkSHiZxfLOnZCZ4HnHdNeK1y-b-Nzy_hUvmHSUhmIf224rJHGdsBb5cnYJcX4X5WB8LIKI_kPxc"/>
+<!-- Amber Signature Required Flag -->
+<div class="absolute top-2 right-2 z-10 flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded shadow-sm">
+<span class="material-symbols-outlined text-xs">draw</span>
+<span class="font-label-xs text-label-xs font-bold uppercase tracking-wider">Sign Required</span>
+</div>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 08</span>
+<span class="font-label-xs text-label-xs text-amber-700 font-medium">Pending Sign</span>
+</div>
+</div>
+<!-- Page 09 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Technical appendix with code excerpts, JSON data payloads formatted in fixed-width typography, subtle line numbers, clean layout document preview." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAatNAeMqodHuc83yNDMGDnfaxJBPHc36z5LXhikNxUsQBiZbU7K4Alf4soYbKZ4DFTsAsk9Mqv9O2AGMvKiPan89110N7jWOiIT0VNauHNBYZ7UWjaMC8ziAMrXbBmONkasPMV-sFdAjpRJtMqkG2Gze0lcojZPEwA13njTOFlI2a7M3fy7ck7j7tvry8IjXunUZ3ZnWx6BgQFBW9OxEqXKMU2k70YNp4SqEMfvxY"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 09</span>
+<span class="font-label-xs text-label-xs text-outline">Appendix A</span>
+</div>
+</div>
+<!-- Page 10 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Software architecture architectural blueprint schema flowchart, database diagrams, API endpoints schema on white document canvas." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2qWt8ck_d0UPnvI5wL0v2b7dCVvrNk19LZTDfU83jIgfi4ELDfPKj-wueyQtfozwEbQDFuf_fP2O_nOBQ-y0FSUt-Bj7HJuqd5wcC802cFQbZxU2jMys6EP9kgYWFE1pp3MVNaK_rmvUN68C2E0mVBGiRdVm9lUnEbnOq4lMeQ8H8Y8Sd2dXqIa3F2GBSj6ogzXr5WRvIxIz_XIx_YcPhxy0Y2-xYwjWT34z1fbHH"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 10</span>
+<span class="font-label-xs text-label-xs text-outline">Diagram 01</span>
+</div>
+</div>
+<!-- Page 11 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Security compliance audit table displaying SOC2 controls, compliance tick markers, green status indicators, rigorous enterprise documentation typography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6J0F-pkm3-jhnsSxI17YDJwHi3qnDOBKkUY84HoMa97PCcvGYMkckhRLzHgdLUboDMI-j4M5HyQayq_Q2Qt44KA3Fko2bDpJA369YkBPcX3L0ZfTDHikdmBZVIkkQQ4KrzsWDJfcF7ZijpTaiNF_LDjpUs-xcboHVmbFN8I5dZO5y-QfbsQe-vAyfXEwoCkOPMLAT3S_ioHIngp8tpawkisrW5S_iYDi_q504b06_"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 11</span>
+<span class="font-label-xs text-label-xs text-outline">Security Audit</span>
+</div>
+</div>
+<!-- Page 12: SCANNED / OCR COMPLETE BADGE -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Historical scanned invoice page with faint physical paper texture, perfectly processed and sharpened black text with OCR bounding box overlay markers in cyan." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnYom7fwjkjRAxf8aRteZ8YSecg_cJpvFzjAEaSDXN94jD4nWfGtiDZLS8isoiIrF-6yT2WwTz3my277y6tCOXSSE5Hpov5TU9drkRbofCbP3vfUWrzdFZ5RtivAvMUZr3hMpXyl0i9VE0EKigYzN0ZcQ-R930svYFN1bbtVxr6e9AHjuivrfB1lCno4AnFp3jL7mM3Nq3ZvOSYBYIoA9c0560lyJgnYVz1TS0Y7xD"/>
+<!-- OCR Badge -->
+<div class="absolute top-2 right-2 z-10 flex items-center gap-1 bg-tertiary-fixed text-on-tertiary-fixed px-2 py-0.5 rounded shadow-sm">
+<span class="material-symbols-outlined text-xs">check_circle</span>
+<span class="font-label-xs text-label-xs font-semibold">OCR Complete</span>
+</div>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 12</span>
+<span class="font-label-xs text-label-xs text-tertiary font-medium">Scanned (300 DPI)</span>
+</div>
+</div>
+<!-- Page 13 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Customer testimonials and case study quotes formatted with large opening quotes, elegant typography, author portrait thumbnails on corporate PDF page." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUIo5g71lWbPn3gkZlcXCg4MXNkODJTZqthXjtPMZrtjyMrCsS5Geve0HIjZ_Dk1YLzIruyyCuXU6DnBl1Y2NQJczDvVqRmub0lnOLXk_0rvUL7NCyMQqFwStzvZof-o8Ep-5113Cd9kV7TQEo5NPa_p1xfJVgsFaGFmNs0CLg8NMcsBpZ19OPqkH-AxR9avFjBmkiiM2_12_eqAH1FJhp1fHWO0ycaiZj6aCBQz7z"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 13</span>
+<span class="font-label-xs text-label-xs text-outline">Case Study</span>
+</div>
+</div>
+<!-- Page 14 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Risk factor disclosure page formatted in double columns with bullet lists, formal financial regulatory terminology on standard white page." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAM9dlL7hzEy3TwoZmR6bgkxhWuY4IHaCG-38LiiO8DHDnU3QMm8ruNDwJ78i4CDxCtjp7g8FjARSulqlIdUvYosW-nwdrd-_bPlrNw20g2I4hBDs1BDV4sSv7Dx1MqG_hz7bWLPrnrEiHzvlw701Qd91Sq7fSE5C1O6RXs61XOau4qaSjPSxOWHaGYqeaF02Rm_lj43KiLSSUuJ82cVTAjEFcJlQF24S9sZ9GYCXLc"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 14</span>
+<span class="font-label-xs text-label-xs text-outline">Disclosures</span>
+</div>
+</div>
+<!-- Page 15 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Index and cross reference table of definitions, alphabetized terminology listing on corporate multi-page report page." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLzVcXDjVTwi_hlEa8QW_D6P0Z5oA2W9luUMi3tPJvW9pml-5ZJLE5l5HgiQcQyU-ZMcLMnzE6WKCD4MgkLlG1w169dAtgabYByu3XLxMyvZg29e_VXiMV93Yp348GXGL82mR_y7LnAv2xMwn5P_PbLuE4EDT5_VQgBUY8kyVh1EdPZsuR_Ea1q8DEYsKFk1eRBGvZyOK8-Gi_1KPTt_2ONr7-C9nZa1_uzN3tkdH6"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 15</span>
+<span class="font-label-xs text-label-xs text-outline">Index & Terms</span>
+</div>
+</div>
+<!-- Page 16 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+<div class="relative bg-surface-container-low aspect-[8.5/11] w-full flex items-center justify-center p-3">
+<img class="w-full h-full object-cover rounded shadow-sm" data-alt="Back cover page of an enterprise report with corporate footer logo, headquarters address, ISO certification badges, and barcode strip." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMJWhs-GW-_kcSMYZnA2_NfZ7_SBn5pjF5VDM1ypIKha6kUHjB13KiTqoH9ww8xdFunk1Ahgl5SLS0ceqesRSGv73tQ2yPUx-Fe5MKA-a1mACEXpUA1Kby06VSdCsmr-E1AC-G-pPqJ5CWybKSls49zywOWSEI-c5NS0kapjBzdw9urpVsC5ad4mPO2vnsqaO-LmTxBlzVG5LqAUDlW4chHYagGg8g3cyugUfuBsi1"/>
+<label class="absolute top-2 left-2 z-10 flex items-center justify-center w-5 h-5 bg-surface-container-lowest rounded shadow-sm cursor-pointer">
+<input class="w-3.5 h-3.5 rounded text-primary-container focus:ring-0" type="checkbox"/>
+</label>
+<div class="absolute inset-0 bg-inverse-surface/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 backdrop-blur-[1px]">
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">rotate_right</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-error hover:bg-error-container flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">delete</span></button>
+<button class="w-7 h-7 rounded-lg bg-surface-container-lowest text-on-surface hover:text-primary flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Page 16</span>
+<span class="font-label-xs text-label-xs text-outline">Back Cover</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Slide Panel: 'Document Operations' summary -->
+<aside class="w-80 shrink-0 flex flex-col gap-space-md">
+<!-- Document Properties Card -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs text-on-surface font-title-sm text-title-sm">
+<span class="material-symbols-outlined text-sm text-primary">analytics</span>
+<span>Document Operations</span>
+</div>
+<span class="font-label-xs text-label-xs text-outline">Q3_Review.pdf</span>
+</div>
+<!-- Metrics Grid -->
+<div class="grid grid-cols-2 gap-space-xs pt-1">
+<div class="p-space-xs bg-surface-container-low rounded-lg flex flex-col">
+<span class="font-label-xs text-label-xs text-outline">Page Count</span>
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">16 Pages</span>
+</div>
+<div class="p-space-xs bg-surface-container-low rounded-lg flex flex-col">
+<span class="font-label-xs text-label-xs text-outline">Orientation</span>
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">Mixed (14P/2L)</span>
+</div>
+<div class="p-space-xs bg-surface-container-low rounded-lg flex flex-col">
+<span class="font-label-xs text-label-xs text-outline">Total File Size</span>
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">6.8 MB</span>
+</div>
+<div class="p-space-xs bg-tertiary-fixed text-on-tertiary-fixed rounded-lg flex flex-col">
+<span class="font-label-xs text-label-xs font-semibold">Optimization</span>
+<span class="font-title-sm text-title-sm font-bold">-42% Avail</span>
+</div>
+</div>
+<!-- Progress Compression Preview -->
+<div class="flex flex-col gap-1 mt-1 p-space-xs bg-surface-container-low rounded-lg">
+<div class="flex items-center justify-between font-label-xs text-label-xs">
+<span class="text-on-surface font-semibold">Standard Web Linearize</span>
+<span class="text-tertiary font-bold">Estimated 3.9 MB</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-container w-[58%]"></div>
+</div>
+<button class="mt-1 w-full py-1 text-center font-label-xs text-label-xs text-primary font-bold hover:bg-surface-container rounded transition-colors">
+            Run Lossless Compactor
+          </button>
+</div>
+</div>
+<!-- Quick Action Presets -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-sm">
+<span class="font-title-sm text-title-sm text-on-surface font-semibold">Batch Layout Presets</span>
+<div class="flex flex-col gap-1.5">
+<button class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container transition-colors text-left">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">format_align_left</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Standardize to Portrait</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline">chevron_right</span>
+</button>
+<button class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container transition-colors text-left">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">content_paste</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Auto-Crop Margins</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline">chevron_right</span>
+</button>
+<button class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container transition-colors text-left">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">delete_sweep</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Remove Blank Pages (0)</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline">chevron_right</span>
+</button>
+<button class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container transition-colors text-left">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">water_drop</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Flatten Watermarks</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Quick Tips Card -->
+<div class="bg-secondary-fixed/50 p-space-md rounded-xl flex items-start gap-space-xs text-on-secondary-fixed">
+<span class="material-symbols-outlined text-base text-secondary mt-0.5">lightbulb</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-title-sm font-bold">Pro Reorder Tip</span>
+<span class="font-body-sm text-body-sm text-on-secondary-fixed-variant leading-tight">Drag any card thumbnail to rearrange sheets. Hold <kbd class="font-label-xs bg-surface-container-lowest px-1 rounded shadow-xs">Shift</kbd> to range-select multiple continuous pages.</span>
+</div>
+</div>
+</aside>
+</div>
+<!-- Bottom Floating Signature Workflow Dock -->
+<div class="fixed bottom-3 left-72 right-12 z-40 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl shadow-xl px-space-lg py-3 flex flex-wrap items-center justify-between gap-space-md">
+<!-- Workflow Stages Header -->
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-space-xs">
+<div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-sm">history_edu</span>
+</div>
+<div class="flex flex-col">
+<span class="font-title-sm text-title-sm text-on-surface font-bold">Send for E-Signature</span>
+<span class="font-label-xs text-label-xs text-outline">Step 2: Signer Orchestration</span>
+</div>
+</div>
+<div class="h-6 w-px bg-surface-container-highest"></div>
+<!-- Signer Sequence Tracker -->
+<div class="flex items-center gap-space-xs">
+<!-- Recipient 1: Me -->
+<div class="flex items-center gap-1.5 px-space-sm py-1 bg-surface-container-low rounded-lg">
+<span class="w-5 h-5 rounded-full bg-secondary text-on-secondary font-label-xs text-label-xs flex items-center justify-center font-bold">1</span>
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">Me</span>
+<span class="font-label-xs text-label-xs text-on-surface-variant">(Self Sign)</span>
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span>
+</div>
+<span class="material-symbols-outlined text-xs text-outline">arrow_forward</span>
+<!-- Recipient 2: Elena Vance -->
+<div class="flex items-center gap-1.5 px-space-sm py-1 bg-primary-fixed text-on-primary-fixed rounded-lg">
+<span class="w-5 h-5 rounded-full bg-primary-container text-on-primary font-label-xs text-label-xs flex items-center justify-center font-bold">2</span>
+<span class="font-label-sm text-label-sm font-semibold">Elena Vance</span>
+<span class="font-label-xs text-label-xs text-on-primary-fixed-variant">(Client Signer)</span>
+<div class="flex items-center text-xs text-on-primary-fixed ml-1" title="Passcode protected link">
+<span class="material-symbols-outlined text-xs">lock</span>
+</div>
+</div>
+<button class="p-1 hover:bg-surface-container text-on-surface-variant hover:text-on-surface rounded-lg transition-colors" title="Add another recipient">
+<span class="material-symbols-outlined text-sm">person_add</span>
+</button>
+</div>
+</div>
+<!-- Right Controls: Security Status & Next Step Button -->
+<div class="flex items-center gap-space-md">
+<div class="hidden lg:flex items-center gap-space-xs font-label-xs text-label-xs text-outline bg-surface-container-low px-2.5 py-1 rounded-lg">
+<span class="material-symbols-outlined text-xs text-tertiary">verified_user</span>
+<span>256-bit Encrypted Chain</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1.5 text-on-surface-variant hover:text-on-surface font-title-sm text-title-sm rounded-lg hover:bg-surface-container transition-colors">
+          Save Draft
+        </button>
+<button class="flex items-center gap-1.5 px-space-lg py-1.5 bg-primary-container text-on-primary hover:bg-opacity-95 font-title-sm text-title-sm rounded-lg shadow-sm transition-all">
+<span>Next: Place Fields & Send</span>
+<span class="material-symbols-outlined text-sm">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple view micro-interaction toggles
+  const organizeBtn = document.getElementById('mode-organize');
+  const signatureBtn = document.getElementById('mode-signature');
+
+  if (organizeBtn && signatureBtn) {
+    organizeBtn.addEventListener('click', () => {
+      organizeBtn.className = 'flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm bg-primary-container text-on-primary shadow-sm transition-all';
+      signatureBtn.className = 'flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all';
+    });
+
+    signatureBtn.addEventListener('click', () => {
+      signatureBtn.className = 'flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm bg-primary-container text-on-primary shadow-sm transition-all';
+      organizeBtn.className = 'flex items-center gap-space-xs px-space-md py-space-xs rounded font-title-sm text-title-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all';
+    });
+  }
+</script></main></div></body></html>

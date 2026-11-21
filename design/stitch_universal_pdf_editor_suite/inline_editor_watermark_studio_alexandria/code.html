@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&amp;family=Public+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#dbdadb","error-container":"#ffdad6","outline-variant":"#c3c6d5","surface-tint":"#2259bf","primary-fixed-dim":"#b1c5ff","secondary-container":"#dfe3e8","on-secondary-fixed-variant":"#42474b","on-tertiary-container":"#4a3f00","error":"#ba1a1a","surface-container-lowest":"#ffffff","secondary-fixed-dim":"#c2c7cc","on-primary-container":"#e7ebff","surface-container-low":"#f5f3f4","on-secondary":"#ffffff","surface-bright":"#faf9fa","surface-container-highest":"#e3e2e3","on-tertiary-fixed-variant":"#524600","on-tertiary-fixed":"#211b00","on-error-container":"#93000a","primary-fixed":"#d9e2ff","primary":"#094cb2","surface-container-high":"#e9e8e9","on-surface":"#1b1c1d","tertiary-fixed-dim":"#dcc661","on-background":"#1b1c1d","tertiary-fixed":"#f9e37a","inverse-primary":"#b1c5ff","secondary-fixed":"#dfe3e8","surface-variant":"#e3e2e3","surface":"#faf9fa","on-primary":"#ffffff","on-primary-fixed-variant":"#00419d","on-tertiary":"#ffffff","outline":"#737784","on-secondary-container":"#606569","surface-container":"#efedee","secondary":"#5a5f63","on-secondary-fixed":"#171c20","inverse-on-surface":"#f2f0f1","tertiary-container":"#bfab49","background":"#faf9fa","tertiary":"#6d5e00","on-surface-variant":"#434653","inverse-surface":"#303031","primary-container":"#3366cc","on-primary-fixed":"#001946","on-error":"#ffffff"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{},"fontFamily":{"headline":["Noto Serif"],"display":["Noto Serif"],"body":["Inter"],"label":["Public Sans"]},"fontSize":{}}}}</script></head><body class="bg-surface font-body text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-low z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)] select-none"><div class="flex flex-col"><div class="h-12 px-5 flex items-center justify-between bg-surface-container"><div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div><div class="w-3 h-3 rounded-full bg-[#febc2e]"></div><div class="w-3 h-3 rounded-full bg-[#28c840]"></div></div><div class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-container-high text-[11px] font-label font-bold text-tertiary tracking-wider uppercase"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Tauri 2.1 Wasm</div></div><div class="px-6 py-5 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-on-primary shadow-sm"><span class="material-symbols-outlined text-[20px]">menu_book</span></div><div><div class="font-headline text-lg font-bold tracking-tight text-on-surface">FluxPDF</div><div class="text-[11px] font-label tracking-wide uppercase text-on-surface-variant">Editorial Workstation</div></div></div><div class="px-4 mb-2"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Workspaces</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="document-workspace" href="#"><span class="material-symbols-outlined text-[20px]">description</span><span>Document Workspace</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="library-and-recent" href="#"><span class="material-symbols-outlined text-[20px]">auto_stories</span><span>Library &amp; Recent</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="page-organizer" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span>Page Organizer</span></a><a aria-current="page" class="flex items-center gap-3 px-3 py-2 rounded-lg transition-all bg-surface-container-highest text-primary font-semibold" data-path="advanced-editor" href="#"><span class="material-symbols-outlined text-[20px]">edit_note</span><span>Advanced Editor</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="sign-and-protect" href="#"><span class="material-symbols-outlined text-[20px]">verified_user</span><span>Sign &amp; Protect</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="ocr-and-export" href="#"><span class="material-symbols-outlined text-[20px]">document_scanner</span><span>OCR &amp; Export</span></a></nav></div><div class="px-4 mt-4"><div class="text-[10px] font-label font-bold uppercase tracking-widest text-secondary px-3 mb-2">Storage Volumes</div><nav class="space-y-0.5" data-active-classes="bg-surface-container-highest text-primary font-semibold"><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="cloud-drives" href="#"><span class="material-symbols-outlined text-[20px]">cloud_done</span><span>Cloud Drives</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="local-vault" href="#"><span class="material-symbols-outlined text-[20px]">lock</span><span>Local Vault</span></a></nav></div></div><div class="p-4 bg-surface-container/60"><div class="p-3 rounded-xl bg-surface-container-lowest flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-on-primary font-headline font-semibold text-xs">FP</div><div class="flex flex-col"><span class="text-xs font-semibold text-on-surface font-headline leading-tight">Editorial Studio</span><span class="text-[10px] font-label text-tertiary font-bold uppercase tracking-wider">Pro Member</span></div></div><a class="text-on-surface-variant hover:text-primary transition-colors" data-path="preferences" href="#"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-28 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between"><div class="h-14 px-6 flex items-center justify-between border-b-0"><div class="flex items-center gap-2 overflow-x-auto"><div class="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-surface-container-high text-xs font-medium text-on-surface shadow-xs"><span class="material-symbols-outlined text-[16px] text-primary">picture_as_pdf</span><span class="font-label font-medium tracking-tight">Contract_Q3_Review.pdf</span><span class="w-1.5 h-1.5 rounded-full bg-primary"></span><span class="material-symbols-outlined text-[15px] text-on-surface-variant hover:text-error transition-colors cursor-pointer">close</span></div><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"><span class="material-symbols-outlined text-[16px]">article</span><span class="font-label">Scholar_Treatise_v4.pdf</span></div><div class="p-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span></div></div><div class="flex items-center gap-4"><div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-xs text-on-surface-variant min-w-[220px]"><span class="material-symbols-outlined text-[16px]">search</span><span class="flex-1">Search text or tools...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-[10px] font-label font-bold text-secondary uppercase">⌘K</kbd></div><div class="flex items-center gap-1"><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">view_sidebar</span></button><button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">fit_screen</span></button></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="h-14 px-6 flex items-center justify-between bg-surface-container-low/70"><div class="flex items-center gap-1.5"><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">pan_tool</span><span>Hand</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-primary">near_me</span><span>Select</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">ink_highlighter</span><span>Highlight</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">comment</span><span>Note</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px] text-tertiary">draw</span><span>Ink</span></button><div class="w-px h-4 bg-surface-variant mx-1"></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">format_shapes</span><span>Add Text</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label font-medium text-on-surface hover:bg-surface-container-high transition-colors" type="button"><span class="material-symbols-outlined text-[17px]">signature</span><span>Stamp &amp; Sign</span></button></div><div class="flex items-center gap-3 text-xs font-label text-on-surface-variant"><div class="flex items-center gap-1 bg-surface-container-high px-2.5 py-1 rounded-lg"><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">remove</span></button><span class="font-medium text-[11px] px-1">125%</span><button class="hover:text-on-surface" type="button"><span class="material-symbols-outlined text-[16px]">add</span></button></div><span class="text-[11px] text-secondary font-medium">Page 3 of 42</span><button class="p-1.5 hover:text-on-surface rounded-lg hover:bg-surface-container-high" type="button"><span class="material-symbols-outlined text-[18px]">fullscreen</span></button></div></div></header><main class="w-full pt-28 bg-surface"><div class="flex flex-col w-full">
+<!-- Secondary Contextual Ribbon: Editor + Typographic Matrix -->
+<div class="w-full bg-surface-container-lowest px-6 py-2.5 flex items-center justify-between shadow-sm z-30 select-none">
+<div class="flex items-center gap-1.5 overflow-x-auto">
+<!-- Tool Set -->
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-highest text-primary font-label text-xs font-semibold shadow-xs" type="button">
+<span class="material-symbols-outlined text-[17px]">edit</span>
+<span>Select &amp; Edit</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-label text-xs font-medium" type="button">
+<span class="material-symbols-outlined text-[17px]">format_shapes</span>
+<span>Add Text</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-label text-xs font-medium" type="button">
+<span class="material-symbols-outlined text-[17px]">add_photo_alternate</span>
+<span>Insert Object</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-label text-xs font-medium" type="button">
+<span class="material-symbols-outlined text-[17px]">ink_eraser</span>
+<span>Redact</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-fixed text-on-primary-fixed font-label text-xs font-semibold shadow-xs" type="button">
+<span class="material-symbols-outlined text-[17px] text-primary" style="font-variation-settings: 'FILL' 1;">branding_watermark</span>
+<span>Watermark Studio</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-label text-xs font-medium" type="button">
+<span class="material-symbols-outlined text-[17px]">check_box</span>
+<span>Form Fields</span>
+</button>
+<div class="w-px h-5 bg-surface-dim mx-2"></div>
+<!-- Live Typographic Adjustments -->
+<div class="flex items-center gap-1.5 bg-surface-container-low px-2 py-1 rounded-lg">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-lowest text-xs font-headline font-semibold text-on-surface shadow-xs cursor-pointer">
+<span>Noto Serif</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">expand_more</span>
+</div>
+<div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-lowest text-xs font-label font-semibold text-on-surface shadow-xs">
+<span>14pt</span>
+</div>
+<div class="flex items-center gap-0.5 ml-1">
+<button class="w-6 h-6 rounded flex items-center justify-center bg-surface-container-highest text-primary font-bold text-xs" title="Bold" type="button">B</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant italic font-serif text-xs" title="Italic" type="button">I</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant underline text-xs" title="Underline" type="button">U</button>
+</div>
+<div class="w-px h-3.5 bg-surface-dim mx-1"></div>
+<div class="flex items-center gap-1">
+<button class="w-4 h-4 rounded-full bg-on-surface ring-2 ring-surface-container-highest cursor-pointer" title="Text Color" type="button"></button>
+<button class="p-1 hover:bg-surface-container-high rounded text-on-surface-variant" title="Align Left" type="button">
+<span class="material-symbols-outlined text-[15px]">format_align_left</span>
+</button>
+<button class="p-1 hover:bg-surface-container-high rounded text-on-surface-variant" title="Align Center" type="button">
+<span class="material-symbols-outlined text-[15px]">format_align_center</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right Side Canvas Zoom & Status -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 text-[11px] font-label font-bold uppercase tracking-wider text-tertiary bg-tertiary-fixed/30 px-2.5 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+        Interactive Vector Mode
+      </div>
+<span class="text-xs font-label text-secondary">Canvas: 100% (612 × 792 pt)</span>
+</div>
+</div>
+<!-- Primary Workspace: Split Layout -->
+<div class="w-full flex items-start h-[calc(100vh-14rem)] overflow-hidden bg-surface-dim/40">
+<!-- Left/Center Canvas Viewport -->
+<div class="flex-1 h-full overflow-y-auto overflow-x-hidden p-8 flex flex-col items-center justify-start relative select-none">
+<!-- Precision Ruler bar (Decorative editorial cue) -->
+<div class="w-[740px] mb-2 flex items-end justify-between px-4 text-[9px] font-label text-secondary opacity-60">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">straighten</span> 0.00 IN
+        </span>
+<span>2.50 IN</span>
+<span>5.00 IN</span>
+<span>7.50 IN</span>
+<span>8.50 IN</span>
+</div>
+<!-- Legal Document Page Replica -->
+<div class="w-[740px] min-h-[960px] bg-surface-container-lowest rounded-xl shadow-xl p-16 relative overflow-hidden transition-all">
+<!-- BACKSTAGE WATERMARK LAYER (Under text stacking option) -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0" id="watermarkCanvasLayer">
+<div class="font-headline font-bold uppercase tracking-[0.25em] text-[#094cb2] whitespace-nowrap text-[58px] opacity-[0.28] transform -rotate-45 transition-all duration-150" id="watermarkLiveText">
+            CONFIDENTIAL • DRAFT v2.1
+          </div>
+</div>
+<!-- Document Content Body -->
+<div class="relative z-10 font-body text-on-surface text-[13px] leading-[1.8]">
+<!-- Document Header -->
+<div class="flex justify-between items-start pb-8">
+<div>
+<div class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-tertiary">Alexandria Editorial Archive // Form 104-B</div>
+<h1 class="text-xl font-headline font-bold text-on-surface tracking-tight mt-1">MASTER CONSULTING SERVICES AGREEMENT</h1>
+<div class="text-xs font-label text-secondary mt-0.5">Execution Copy • Schedule IV (§ 8.2)</div>
+</div>
+<div class="text-right">
+<span class="text-[11px] font-label font-semibold text-secondary uppercase tracking-wider block">PAGE 14 OF 42</span>
+<span class="text-[10px] font-label text-outline block mt-0.5">Hash: #98e21a8f</span>
+</div>
+</div>
+<!-- Section 1 -->
+<div class="mt-4">
+<h2 class="font-headline font-semibold text-sm text-on-surface mb-2 tracking-tight">1. PREAMBLE &amp; RETENTION TERMS</h2>
+<p class="text-on-surface-variant font-serif text-[12.5px] leading-relaxed text-justify mb-4">
+              This Master Consulting Services Agreement (hereinafter, the “Agreement”) is entered into by and between Alexandria Lexis Technologies AG, a Swiss corporation with offices at Bahnhofstrasse 45, Zürich, and the signatory client identified herein. Each party covenants to uphold archival confidentiality standards and peer-reviewed vector fidelity protocols throughout the designated term.
+            </p>
+</div>
+<!-- Section 2: ACTIVE EDIT SELECTION BOUNDING BOX -->
+<div class="mt-6 relative">
+<!-- Floating Contextual Vector Edit Action Bar -->
+<div class="absolute -top-9 left-0 flex items-center gap-1 bg-on-surface text-surface-container-lowest px-2.5 py-1 rounded-lg text-[11px] font-label shadow-lg z-30">
+<span class="material-symbols-outlined text-[13px] text-primary-fixed-dim">edit_note</span>
+<span class="font-semibold text-primary-fixed-dim">P.2 Edit Block</span>
+<span class="text-outline-variant mx-1">/</span>
+<span class="text-surface-container-high">Paragraph</span>
+<div class="w-px h-3 bg-on-surface-variant mx-1.5"></div>
+<button class="hover:text-primary-fixed-dim flex items-center gap-1 transition-colors" type="button">
+<span class="material-symbols-outlined text-[12px]">content_copy</span>
+<span>Copy</span>
+</button>
+<button class="hover:text-error-container flex items-center gap-1 ml-1 transition-colors" type="button">
+<span class="material-symbols-outlined text-[12px]">delete</span>
+<span>Delete</span>
+</button>
+</div>
+<!-- Active Selection Box with Corner Control Points -->
+<div class="relative bg-primary/5 p-4 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest transition-all">
+<!-- Corner Resize Anchors -->
+<span class="absolute -top-1.5 -left-1.5 w-3 h-3 bg-surface-container-lowest border-2 border-primary rounded-xs shadow-xs cursor-nwse-resize"></span>
+<span class="absolute -top-1.5 -right-1.5 w-3 h-3 bg-surface-container-lowest border-2 border-primary rounded-xs shadow-xs cursor-nesw-resize"></span>
+<span class="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-surface-container-lowest border-2 border-primary rounded-xs shadow-xs cursor-nesw-resize"></span>
+<span class="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-surface-container-lowest border-2 border-primary rounded-xs shadow-xs cursor-nwse-resize"></span>
+<!-- Content Inside Active Block -->
+<h2 class="font-headline font-bold text-sm text-primary mb-2 tracking-tight flex items-center justify-between">
+<span>2. OBLIGATIONS &amp; CONFIDENTIAL INFORMATION</span>
+<span class="text-[10px] font-label font-normal text-primary/70 uppercase">Caret: Ln 12, Col 84</span>
+</h2>
+<p class="text-on-surface font-serif text-[13px] leading-relaxed text-justify">
+                Neither Party shall divulge, publish, transmit, or otherwise disclose to any unauthorized third party any proprietary metadata, cryptographic seal records, or working vector templates without express written authorization. All working documentation tagged under Alexandria Workstation safeguards shall remain subject to automated watermark imposition across export passes.
+              </p>
+</div>
+</div>
+<!-- Section 3 -->
+<div class="mt-6">
+<h2 class="font-headline font-semibold text-sm text-on-surface mb-2 tracking-tight">3. INTELLECTUAL PROPERTY &amp; DEPOSITIONS</h2>
+<p class="text-on-surface-variant font-serif text-[12.5px] leading-relaxed text-justify mb-4">
+              All deliverables, inventions, modifications, and editorial revisions authored or drafted in the execution of the services outlined in Appendix A shall belong exclusively to the Principal. The Consultant retains moral authorship attribution as established under international convention.
+            </p>
+<p class="text-on-surface-variant font-serif text-[12.5px] leading-relaxed text-justify">
+              In witness whereof, the authorized signatories have triggered cryptographic validation tokens below on this 24th day of October, 2024.
+            </p>
+</div>
+<!-- Document Footer / Signatures Replica -->
+<div class="mt-12 pt-8 flex items-center justify-between">
+<div class="w-48">
+<div class="h-9 border-b border-surface-dim flex items-end pb-1 font-headline italic text-xs text-primary">Julian Vance-Moreau</div>
+<div class="text-[10px] font-label font-bold text-secondary uppercase mt-1.5">For Alexandria Lexis AG</div>
+</div>
+<div class="w-48">
+<div class="h-9 border-b border-surface-dim flex items-end pb-1 font-headline italic text-xs text-secondary">[Awaiting Remote Signature]</div>
+<div class="text-[10px] font-label font-bold text-secondary uppercase mt-1.5">For Client Executive</div>
+</div>
+</div>
+</div>
+<!-- FOREGROUND WATERMARK LAYER (Placeholder if Top Stacking enabled) -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-20 hidden" id="watermarkTopLayer">
+<div class="font-headline font-bold uppercase tracking-[0.25em] text-[#094cb2] whitespace-nowrap text-[58px] opacity-[0.28] transform -rotate-45">
+            CONFIDENTIAL • DRAFT v2.1
+          </div>
+</div>
+</div>
+<!-- Canvas Bottom Utility -->
+<div class="w-[740px] mt-4 flex items-center justify-between text-xs font-label text-secondary px-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[15px] text-tertiary">lock_clock</span>
+<span>Auto-saved to Local Vault: 14:02:18</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="hover:text-primary transition-colors flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[15px]">undo</span> Undo
+          </button>
+<button class="hover:text-primary transition-colors flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[15px]">redo</span> Redo
+          </button>
+<span class="text-surface-dim">|</span>
+<button class="hover:text-primary transition-colors flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[15px]">layers</span> Layers (4)
+          </button>
+</div>
+</div>
+</div>
+<!-- Right Inspector: Watermark Studio Panel -->
+<aside class="w-96 h-full bg-surface-container-lowest flex flex-col justify-between shadow-2xl z-20">
+<!-- Panel Header with Toggle Switch -->
+<div class="p-6 bg-surface-container-low/60 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">branding_watermark</span>
+</div>
+<div>
+<h3 class="font-headline text-sm font-bold text-on-surface leading-tight">Watermark Studio</h3>
+<p class="text-[11px] font-label text-secondary">Vector stamp orchestrator</p>
+</div>
+</div>
+<!-- Studio Master Switch -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" id="studioMasterToggle" type="checkbox"/>
+<div class="w-9 h-5 bg-surface-dim peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Scrollable Inspector Controls -->
+<div class="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+<!-- 1. Watermark Text Input & Presets -->
+<div>
+<div class="flex items-center justify-between mb-2">
+<label class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary">Stamp Inscription</label>
+<span class="text-[10px] font-label text-primary hover:underline cursor-pointer">Clear</span>
+</div>
+<div class="relative">
+<input class="w-full bg-surface-container-low text-xs font-headline font-semibold text-on-surface rounded-lg px-3.5 py-2.5 pr-8 focus:outline-none focus:bg-surface-container-lowest focus:ring-1 focus:ring-primary shadow-xs transition-all" id="watermarkTextInput" type="text" value="CONFIDENTIAL • DRAFT v2.1"/>
+<span class="material-symbols-outlined text-[16px] text-secondary absolute right-2.5 top-2.5">text_fields</span>
+</div>
+<!-- Quick Preset Chips -->
+<div class="mt-2.5 flex flex-wrap gap-1.5">
+<button class="px-2.5 py-1 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-[10px] font-label font-semibold text-on-surface-variant transition-colors" onclick="setPreset('CONFIDENTIAL')" type="button">
+              CONFIDENTIAL
+            </button>
+<button class="px-2.5 py-1 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-[10px] font-label font-semibold text-on-surface-variant transition-colors" onclick="setPreset('DO NOT COPY')" type="button">
+              DO NOT COPY
+            </button>
+<button class="px-2.5 py-1 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-[10px] font-label font-semibold text-on-surface-variant transition-colors" onclick="setPreset('PREVIEW ONLY')" type="button">
+              PREVIEW ONLY
+            </button>
+<button class="px-2.5 py-1 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-[10px] font-label font-semibold text-on-surface-variant transition-colors" onclick="setPreset('INTERNAL USE')" type="button">
+              INTERNAL USE
+            </button>
+</div>
+</div>
+<!-- 2. Appearance & Geometry Controls -->
+<div class="space-y-4">
+<div class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary">Appearance &amp; Geometry</div>
+<!-- Opacity Slider -->
+<div>
+<div class="flex justify-between items-center text-xs font-label mb-1.5">
+<span class="text-on-surface-variant">Stamp Opacity</span>
+<span class="font-bold text-on-surface" id="opacityVal">28%</span>
+</div>
+<input class="w-full h-1.5 bg-surface-container-high rounded-lg appearance-none cursor-pointer accent-primary" id="opacitySlider" max="100" min="5" type="range" value="28"/>
+</div>
+<!-- Rotation Angle Slider -->
+<div>
+<div class="flex justify-between items-center text-xs font-label mb-1.5">
+<span class="text-on-surface-variant">Rotation Angle</span>
+<span class="font-bold text-on-surface" id="angleVal">-45°</span>
+</div>
+<input class="w-full h-1.5 bg-surface-container-high rounded-lg appearance-none cursor-pointer accent-primary" id="angleSlider" max="90" min="-90" type="range" value="-45"/>
+</div>
+<!-- Size Scale Slider -->
+<div>
+<div class="flex justify-between items-center text-xs font-label mb-1.5">
+<span class="text-on-surface-variant">Size Scale</span>
+<span class="font-bold text-on-surface" id="sizeVal">58px</span>
+</div>
+<input class="w-full h-1.5 bg-surface-container-high rounded-lg appearance-none cursor-pointer accent-primary" id="sizeSlider" max="110" min="20" type="range" value="58"/>
+</div>
+<!-- Stamp Color Swatches -->
+<div>
+<span class="text-xs font-label text-on-surface-variant block mb-2">Pigment Palette</span>
+<div class="flex items-center gap-2.5">
+<!-- Cobalt (#094cb2) Selected -->
+<button class="color-swatch w-7 h-7 rounded-full bg-primary ring-2 ring-offset-2 ring-primary flex items-center justify-center text-on-primary" onclick="setWatermarkColor('#094cb2', this)" type="button">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</button>
+<!-- Coral (#ba1a1a) -->
+<button class="color-swatch w-7 h-7 rounded-full bg-error ring-2 ring-offset-2 ring-transparent flex items-center justify-center text-on-error" onclick="setWatermarkColor('#ba1a1a', this)" type="button">
+</button>
+<!-- Lilac/Indigo (#434653) -->
+<button class="color-swatch w-7 h-7 rounded-full bg-on-surface-variant ring-2 ring-offset-2 ring-transparent flex items-center justify-center text-white" onclick="setWatermarkColor('#434653', this)" type="button">
+</button>
+<!-- Gold/Tertiary (#6d5e00) -->
+<button class="color-swatch w-7 h-7 rounded-full bg-tertiary ring-2 ring-offset-2 ring-transparent flex items-center justify-center text-white" onclick="setWatermarkColor('#6d5e00', this)" type="button">
+</button>
+<!-- Warm Cream / Dim (#5a5f63) -->
+<button class="color-swatch w-7 h-7 rounded-full bg-secondary ring-2 ring-offset-2 ring-transparent flex items-center justify-center text-white" onclick="setWatermarkColor('#5a5f63', this)" type="button">
+</button>
+</div>
+</div>
+</div>
+<!-- 3. Placement Matrix -->
+<div>
+<label class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary block mb-2">Placement Matrix</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-3 rounded-lg bg-surface-container-high text-primary ring-1 ring-primary flex flex-col items-center gap-1.5 text-center transition-all" id="btnCenterDiag" onclick="setMatrix('center')" type="button">
+<span class="material-symbols-outlined text-[20px]">filter_center_focus</span>
+<span class="font-label text-xs font-semibold">Center Diagonal</span>
+</button>
+<button class="p-3 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant flex flex-col items-center gap-1.5 text-center transition-all" id="btnTilePattern" onclick="setMatrix('tile')" type="button">
+<span class="material-symbols-outlined text-[20px]">grid_4x4</span>
+<span class="font-label text-xs font-medium">Repeating Tile</span>
+</button>
+</div>
+</div>
+<!-- 4. Layer Stacking Depth -->
+<div>
+<label class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary block mb-2">Layer Stacking Depth</label>
+<div class="space-y-2">
+<label class="flex items-center gap-3 p-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors">
+<input checked="" class="w-4 h-4 text-primary accent-primary" name="layerDepth" onchange="toggleLayerStack(this.value)" type="radio" value="behind"/>
+<div class="flex flex-col">
+<span class="text-xs font-label font-semibold text-on-surface">Behind text elements</span>
+<span class="text-[10px] font-body text-secondary">Preserves high typographic legibility</span>
+</div>
+</label>
+<label class="flex items-center gap-3 p-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors">
+<input class="w-4 h-4 text-primary accent-primary" name="layerDepth" onchange="toggleLayerStack(this.value)" type="radio" value="top"/>
+<div class="flex flex-col">
+<span class="text-xs font-label font-semibold text-on-surface">Overlay on top of text</span>
+<span class="text-[10px] font-body text-secondary">Anti-tamper evidentiary stamp mode</span>
+</div>
+</label>
+</div>
+</div>
+<!-- 5. Target Scope Dropdown -->
+<div>
+<label class="text-[11px] font-label font-bold uppercase tracking-wider text-secondary block mb-1.5">Target Scope</label>
+<div class="relative">
+<select class="w-full appearance-none bg-surface-container-low text-xs font-label font-semibold text-on-surface px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-xs cursor-pointer">
+<option>Current Page Only (p. 14)</option>
+<option>All Pages in Document (1-42)</option>
+<option>Odd Pages Only</option>
+<option>Even Pages Only</option>
+<option>Custom Range (e.g. 1-14, 20)</option>
+</select>
+<span class="material-symbols-outlined text-[18px] text-secondary absolute right-3 top-2.5 pointer-events-none">unfold_more</span>
+</div>
+</div>
+</div>
+<!-- Bottom Sticky Action CTA -->
+<div class="p-6 bg-surface-container-low/90 backdrop-blur-md">
+<button class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-container hover:brightness-105 active:scale-[0.99] text-on-primary font-headline font-semibold text-sm shadow-md flex items-center justify-center gap-2 transition-all" id="bakeBtn" type="button">
+<span class="material-symbols-outlined text-[19px]">verified</span>
+<span>Bake Watermark to Document</span>
+</button>
+<div class="flex items-center justify-center gap-1.5 mt-2.5 text-[11px] font-label text-secondary">
+<span class="material-symbols-outlined text-[13px] text-tertiary">verified_user</span>
+<span>Embeds lossless PostScript vector primitives</span>
+</div>
+</div>
+</aside>
+</div>
+<!-- Inline Client Interaction Script -->
+<script>
+    (function initWatermarkStudio() {
+      const textInput = document.getElementById('watermarkTextInput');
+      const opacitySlider = document.getElementById('opacitySlider');
+      const angleSlider = document.getElementById('angleSlider');
+      const sizeSlider = document.getElementById('sizeSlider');
+      const opacityVal = document.getElementById('opacityVal');
+      const angleVal = document.getElementById('angleVal');
+      const sizeVal = document.getElementById('sizeVal');
+      const liveText = document.getElementById('watermarkLiveText');
+      const layerCanvas = document.getElementById('watermarkCanvasLayer');
+      const masterToggle = document.getElementById('studioMasterToggle');
+      const topLayer = document.getElementById('watermarkTopLayer');
+
+      // Live text sync
+      textInput.addEventListener('input', (e) => {
+        liveText.textContent = e.target.value || 'WATERMARK';
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.textContent = e.target.value || 'WATERMARK';
+        }
+      });
+
+      // Opacity
+      opacitySlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        opacityVal.textContent = val + '%';
+        liveText.style.opacity = val / 100;
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.style.opacity = val / 100;
+        }
+      });
+
+      // Rotation Angle
+      angleSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        angleVal.textContent = val + '°';
+        liveText.style.transform = `rotate(${val}deg)`;
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.style.transform = `rotate(${val}deg)`;
+        }
+      });
+
+      // Size Scale
+      sizeSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        sizeVal.textContent = val + 'px';
+        liveText.style.fontSize = val + 'px';
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.style.fontSize = val + 'px';
+        }
+      });
+
+      // Toggle studio visibility
+      masterToggle.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        layerCanvas.style.display = checked ? 'flex' : 'none';
+        topLayer.style.display = checked ? 'flex' : 'none';
+      });
+
+      // Preset helper exposed globally
+      window.setPreset = function(text) {
+        textInput.value = text;
+        liveText.textContent = text;
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.textContent = text;
+        }
+      };
+
+      // Color picker
+      window.setWatermarkColor = function(colorHex, btn) {
+        liveText.style.color = colorHex;
+        if (topLayer.firstElementChild) {
+          topLayer.firstElementChild.style.color = colorHex;
+        }
+        document.querySelectorAll('.color-swatch').forEach(el => {
+          el.classList.remove('ring-primary');
+          el.classList.add('ring-transparent');
+          el.innerHTML = '';
+        });
+        btn.classList.remove('ring-transparent');
+        btn.classList.add('ring-primary');
+        btn.innerHTML = '<span class="material-symbols-outlined text-[14px]">check</span>';
+      };
+
+      // Matrix toggle
+      window.setMatrix = function(mode) {
+        const btnCenter = document.getElementById('btnCenterDiag');
+        const btnTile = document.getElementById('btnTilePattern');
+        if (mode === 'center') {
+          btnCenter.classList.add('bg-surface-container-high', 'text-primary', 'ring-1', 'ring-primary');
+          btnCenter.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+          btnTile.classList.remove('bg-surface-container-high', 'text-primary', 'ring-1', 'ring-primary');
+          btnTile.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+          liveText.classList.remove('text-xs');
+          liveText.style.letterSpacing = '0.25em';
+        } else {
+          btnTile.classList.add('bg-surface-container-high', 'text-primary', 'ring-1', 'ring-primary');
+          btnTile.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+          btnCenter.classList.remove('bg-surface-container-high', 'text-primary', 'ring-1', 'ring-primary');
+          btnCenter.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+        }
+      };
+
+      // Layer stack depth toggle
+      window.toggleLayerStack = function(val) {
+        if (val === 'top') {
+          layerCanvas.classList.add('hidden');
+          topLayer.classList.remove('hidden');
+        } else {
+          topLayer.classList.add('hidden');
+          layerCanvas.classList.remove('hidden');
+        }
+      };
+
+      // Toast micro-interaction on Bake
+      const bakeBtn = document.getElementById('bakeBtn');
+      bakeBtn.addEventListener('click', () => {
+        const origHtml = bakeBtn.innerHTML;
+        bakeBtn.innerHTML = '<span class="material-symbols-outlined text-[19px] animate-spin">refresh</span><span>Embedding PostScript Layer...</span>';
+        setTimeout(() => {
+          bakeBtn.innerHTML = '<span class="material-symbols-outlined text-[19px]">task_alt</span><span>Watermark Baked into v2.1!</span>';
+          setTimeout(() => {
+            bakeBtn.innerHTML = origHtml;
+          }, 2400);
+        }, 850);
+      });
+    })();
+  </script>
+</div></main></div></body></html>

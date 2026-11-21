@@ -1,0 +1,51 @@
+{
+  "name": "novapdf",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "setup:pdfium": "node scripts/fetch-pdfium.mjs",
+    "postinstall": "node scripts/fetch-pdfium.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "coverage:rust": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --summary-only --ignore-filename-regex \"(.tests[.]rs|src.(main|host|sandbox)[.]rs|worker.mod[.]rs)$\" --fail-under-lines 80",
+    "coverage:rust:html": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html --ignore-filename-regex \"(.tests[.]rs|src.(main|host|sandbox)[.]rs|worker.mod[.]rs)$\"",
+    "test:all": "npm run typecheck && npm run test:coverage && npm run coverage:rust && npm run test:e2e"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/noto-serif": "5.2.9",
+    "@fontsource-variable/public-sans": "5.2.7",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^8.0.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.13",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^5.1.1",
+    "jsdom": "^31.0.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^5.1.1"
+  }
+}
