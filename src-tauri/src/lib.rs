@@ -3,9 +3,12 @@ pub mod geometry;
 mod host;
 pub mod protocol;
 mod sandbox;
+pub mod shared;
 pub mod worker;
 
-use tauri::webview::Url;
+use std::time::Duration;
+
+use tauri::webview::{PageLoadEvent, Url};
 use tauri::{DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::commands::AppState;
@@ -45,12 +48,36 @@ pub fn run() {
                 app.state::<AppState>().grant(&paths);
             }
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+            // Hidden until the UI has loaded, so the user never sees a blank white
+            // window. The fallback makes sure it appears even if loading stalls.
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("NovaPDF")
                 .inner_size(1280.0, 840.0)
                 .min_inner_size(720.0, 480.0)
+                .visible(false)
                 .on_navigation(is_app_url)
+                .on_page_load(|w, payload| {
+                    if payload.event() == PageLoadEvent::Finished {
+                        let _ = w.show();
+                    }
+                })
                 .build()?;
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                let _ = window.show();
+            });
+
+            // Start the PDF engine while the UI loads, then stop idle workers so
+            // their PDFium caches go back to the OS.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                handle.state::<AppState>().pool.warm().await;
+                let mut tick = tokio::time::interval(Duration::from_secs(10));
+                loop {
+                    tick.tick().await;
+                    handle.state::<AppState>().pool.trim_idle();
+                }
+            });
             Ok(())
         })
         .on_window_event(|window, event| {

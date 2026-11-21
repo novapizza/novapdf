@@ -23,7 +23,7 @@ const props = (extra: Partial<Omit<Parameters<typeof PageGrid>[0], "onSelect">> 
 describe("thumbRequest", () => {
   it("buckets the width for cache hits and drops empty edits", () => {
     const r = thumbRequest(page("a"), 170, null);
-    expect(r).toMatchObject({ width: 240, format: "jpeg", priority: "thumb", edits: null });
+    expect(r).toMatchObject({ width: 180, format: "jpeg", priority: "thumb", edits: null });
     expect(thumbRequest(page("a"), 5000, null).width).toBe(1200);
     const edits = { ...EMPTY_EDITS, blocks: [block("x")] };
     expect(thumbRequest(page("a", 1, 0, { edits }), 170, null).edits).toBe(edits);

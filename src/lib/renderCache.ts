@@ -1,20 +1,37 @@
 // Page image cache and request queue.
 //
 // * Results are cached as object URLs keyed by everything that affects the pixels.
+// * Thumbnails and full-page views have separate budgets, so a few large page
+//   renders never push out the thumbnails of a long document (and vice versa).
 // * Thumbnail requests are queued newest-first with limited concurrency and are
 //   dropped if their thumbnail scrolls out of view before they start.
 // * Page-view requests skip the queue (the backend gives them their own worker).
 
 import { api, type RenderRequest } from "./api";
 
-const MAX_ENTRIES = 600;
-/** Full-page renders are large; cap the decoded-file bytes we keep alive. */
-const MAX_BYTES = 384 * 1024 * 1024;
+type Kind = RenderRequest["priority"];
+const MB = 1024 * 1024;
+/**
+ * Encoded bytes kept alive per kind. Thumbnail JPEGs are ~20-40 KB, so the thumbnail
+ * budget holds both sizes (grid and filmstrip) for a 1000-page document. Page views
+ * are PNGs of 1-4 MB each, so only the pages around the reader are kept.
+ */
+export const BUDGET: Record<Kind, { entries: number; bytes: number }> = {
+  thumb: { entries: 3000, bytes: 96 * MB },
+  view: { entries: 48, bytes: 128 * MB },
+};
 const THUMB_CONCURRENCY = 3;
 
-const cache = new Map<string, string>(); // key -> object URL (Map keeps LRU order)
-const sizes = new Map<string, number>();
-let totalBytes = 0;
+interface Entry {
+  url: string;
+  size: number;
+  kind: Kind;
+}
+const cache = new Map<string, Entry>(); // key -> entry (Map keeps LRU order)
+const used: Record<Kind, { entries: number; bytes: number }> = {
+  thumb: { entries: 0, bytes: 0 },
+  view: { entries: 0, bytes: 0 },
+};
 const inflight = new Map<string, Promise<string>>();
 
 interface Job {
@@ -46,37 +63,47 @@ export function renderKey(req: RenderRequest): string {
   return hash(JSON.stringify(rest));
 }
 
-function store(key: string, blob: Blob): string {
-  const url = URL.createObjectURL(blob);
-  cache.set(key, url);
-  sizes.set(key, blob.size);
-  totalBytes += blob.size;
-  while (cache.size > MAX_ENTRIES || (totalBytes > MAX_BYTES && cache.size > 1)) {
-    const [oldKey, oldUrl] = cache.entries().next().value as [string, string];
-    cache.delete(oldKey);
-    totalBytes -= sizes.get(oldKey) ?? 0;
-    sizes.delete(oldKey);
-    // Safe: an <img> that already decoded this URL keeps showing it.
-    URL.revokeObjectURL(oldUrl);
+/** Drops the least recently used entries of one kind until it fits its budget. */
+function evict(kind: Kind) {
+  const u = used[kind];
+  const b = BUDGET[kind];
+  while (u.entries > 1 && (u.entries > b.entries || u.bytes > b.bytes)) {
+    for (const [key, e] of cache) {
+      if (e.kind !== kind) continue;
+      cache.delete(key);
+      u.entries -= 1;
+      u.bytes -= e.size;
+      // Safe: an <img> that already loaded this URL keeps its image.
+      URL.revokeObjectURL(e.url);
+      break;
+    }
   }
+}
+
+function store(key: string, blob: Blob, kind: Kind): string {
+  const url = URL.createObjectURL(blob);
+  cache.set(key, { url, size: blob.size, kind });
+  used[kind].entries += 1;
+  used[kind].bytes += blob.size;
+  evict(kind);
   return url;
 }
 
 export function cached(req: RenderRequest): string | undefined {
   const key = renderKey(req);
-  const url = cache.get(key);
-  if (url) {
+  const e = cache.get(key);
+  if (e) {
     cache.delete(key);
-    cache.set(key, url);
+    cache.set(key, e);
   }
-  return url;
+  return e?.url;
 }
 
 function run(job: Job) {
   active += 1;
   const p = api
     .renderPage(job.req)
-    .then((blob) => store(job.key, blob))
+    .then((blob) => store(job.key, blob, "thumb"))
     .finally(() => {
       inflight.delete(job.key);
       active -= 1;
@@ -112,7 +139,7 @@ export function requestRender(req: RenderRequest, signal?: AbortSignal): Promise
   if (req.priority === "view") {
     const p = api
       .renderPage(req)
-      .then((blob) => store(key, blob))
+      .then((blob) => store(key, blob, "view"))
       .finally(() => inflight.delete(key));
     inflight.set(key, p);
     return p;

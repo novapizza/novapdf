@@ -1060,7 +1060,11 @@ const FilmThumb = memo(function FilmThumb(p: {
       aria-current={p.active ? "page" : undefined}
     >
       <span className="film-img" style={{ height }}>
-        {url ? <img src={url} alt="" draggable={false} /> : <span className={`thumb-placeholder${error ? " error" : ""}`} />}
+        {url ? (
+          <img src={url} alt="" draggable={false} decoding="async" />
+        ) : (
+          <span className={`thumb-placeholder${error ? " error" : ""}`} />
+        )}
         {p.active && <span className="film-active">Active</span>}
         {edited && <span className="film-edited" title="This page has edits" />}
         <span className="film-num">p. {p.index + 1}</span>

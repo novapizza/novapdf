@@ -94,6 +94,40 @@ describe("App: start and open", () => {
     expect(status()).toHaveTextContent("2 files");
   });
 
+  it("overlapping drops keep both files, even when the second opens first", async () => {
+    render(<App />);
+    const pending = new Map<string, () => void>();
+    tauriMock.handle("open_dropped", (a) => {
+      const [name] = a.paths as string[];
+      const d = doc(200 + nextDoc++, name === "big.pdf" ? 3 : 2, name);
+      return new Promise((resolve) => pending.set(name, () => resolve([opened(d)])));
+    });
+    await act(async () => tauriMock.emit("files-dropped", ["big.pdf"]));
+    await act(async () => tauriMock.emit("files-dropped", ["small.pdf"]));
+    await act(async () => pending.get("small.pdf")!());
+    expect(screen.queryByText(/Opened small\.pdf/)).not.toBeInTheDocument(); // waits for big.pdf
+    await act(async () => pending.get("big.pdf")!());
+    expect(await screen.findByText("Opened small.pdf (2 pages)")).toBeInTheDocument();
+    expect(status()).toHaveTextContent("of 5");
+    expect(status()).toHaveTextContent("2 files");
+    expect(tauriMock.calls("close_document")).toEqual([]);
+  });
+
+  it("when the first of two overlapping drops fails, the second still opens", async () => {
+    render(<App />);
+    tauriMock.handle("open_dropped", (a) => {
+      const [name] = a.paths as string[];
+      return [name === "bad.pdf" ? { fileName: name, document: null, error: "This file is not a PDF." } : opened(doc(300 + nextDoc++, 2, name))];
+    });
+    await act(async () => {
+      tauriMock.emit("files-dropped", ["bad.pdf"]);
+      tauriMock.emit("files-dropped", ["good.pdf"]);
+    });
+    expect(await screen.findByText("bad.pdf: This file is not a PDF.")).toBeInTheDocument();
+    expect(await screen.findByText("Opened good.pdf (2 pages)")).toBeInTheDocument();
+    expect(status()).toHaveTextContent("of 2");
+  });
+
   it("a failed drop shows an error", async () => {
     render(<App />);
     tauriMock.handle("open_dropped", () => {

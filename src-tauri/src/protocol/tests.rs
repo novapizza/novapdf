@@ -206,6 +206,7 @@ fn page(doc_id: DocId) -> OutputPage {
 #[test]
 fn doc_ids_per_request() {
     assert!(Request::Open { doc_id: 3 }.doc_ids().is_empty());
+    assert!(Request::OpenShared { doc_id: 3, handle: 1, len: 1 }.doc_ids().is_empty());
     assert!(Request::Close { doc_id: 3 }.doc_ids().is_empty());
     assert!(Request::Layout(layout_args()).doc_ids().is_empty());
     let render = Request::Render {
@@ -514,6 +515,10 @@ fn results_serialize_with_ts_field_names() {
 fn request_tags_use_op_names() {
     let cases = [
         (Request::Open { doc_id: 1 }, json!({"op": "open", "docId": 1})),
+        (
+            Request::OpenShared { doc_id: 1, handle: 0x1a4, len: 4096 },
+            json!({"op": "openShared", "docId": 1, "handle": 0x1a4, "len": 4096}),
+        ),
         (Request::Close { doc_id: 2 }, json!({"op": "close", "docId": 2})),
         (Request::Extract { doc_id: 3, page_index: 4 }, json!({"op": "extract", "docId": 3, "pageIndex": 4})),
         (

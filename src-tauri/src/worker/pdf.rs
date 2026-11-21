@@ -14,6 +14,7 @@ use pdfium_render::prelude::{
 };
 
 use crate::geometry::Matrix;
+use crate::shared::Backing;
 
 // Constants from the PDFium headers (not re-exported by pdfium-render).
 pub const FPDF_ANNOT: c_int = 0x01;
@@ -87,12 +88,18 @@ pub struct Doc<'l> {
     pub h: FPDF_DOCUMENT,
     /// PDFium reads lazily from this buffer, so it must live as long as the document.
     /// Declared after `h` is irrelevant: `Drop::drop` closes the document first.
-    _bytes: Option<Vec<u8>>,
+    _bytes: Option<Backing>,
 }
 
 impl<'l> Doc<'l> {
     pub fn load(lib: &'l Lib, bytes: Vec<u8>) -> Result<Self, String> {
-        let h = unsafe { lib.b().FPDF_LoadMemDocument64(&bytes, None) };
+        Self::load_from(lib, Backing::Owned(bytes))
+    }
+
+    /// Loads from owned bytes or a read-only shared-memory view. Moving the backing
+    /// into `Self` does not move the bytes themselves, so PDFium's pointer stays valid.
+    pub fn load_from(lib: &'l Lib, bytes: Backing) -> Result<Self, String> {
+        let h = unsafe { lib.b().FPDF_LoadMemDocument64(bytes.bytes(), None) };
         if h.is_null() {
             return Err(lib.last_error());
         }

@@ -62,6 +62,7 @@ export default function App() {
   // Keep refs for event handlers registered once.
   const stateRef = useRef({ ws, dirty, docs });
   stateRef.current = { ws, dirty, docs };
+  const drops = useRef({ pending: 0, startedEmpty: false, opened: false, chain: Promise.resolve() });
 
   // ---------- opening ----------
 
@@ -105,16 +106,32 @@ export default function App() {
   };
 
   useEffect(() => {
-    const un = listen<string[]>("files-dropped", async (e) => {
-      const mode = stateRef.current.ws.pages.length > 0 ? "append" : "replace";
-      try {
-        setBusy("Opening…");
-        addOutcomes(await api.openDropped(e.payload), mode);
-      } catch (err) {
-        notify(errorMessage(err), "error");
-      } finally {
-        setBusy(null);
+    // Drops that overlap (a second drop while the first is still opening) form one
+    // burst. Results are applied in drop order, and only the first document opened
+    // into an empty workspace replaces it; everything after that appends. Deciding
+    // this when each drop arrives would let a later drop "replace" an earlier one.
+    const un = listen<string[]>("files-dropped", (e) => {
+      const d = drops.current;
+      if (d.pending === 0) {
+        d.startedEmpty = stateRef.current.ws.pages.length === 0;
+        d.opened = false;
       }
+      d.pending += 1;
+      setBusy("Opening…");
+      const opening = api.openDropped(e.payload);
+      d.chain = d.chain.then(async () => {
+        try {
+          const outcomes = await opening;
+          const mode = d.startedEmpty && !d.opened ? "replace" : "append";
+          if (outcomes.some((o) => o.document)) d.opened = true;
+          addOutcomes(outcomes, mode);
+        } catch (err) {
+          notify(errorMessage(err), "error");
+        } finally {
+          d.pending -= 1;
+          if (d.pending === 0) setBusy(null);
+        }
+      });
     });
     return () => {
       un.then((f) => f());

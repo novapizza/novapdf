@@ -19,7 +19,7 @@ use crate::protocol::{
     Request, Watermark, WatermarkScan,
 };
 
-const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_FILE_BYTES: u64 = crate::protocol::MAX_DOC_BYTES;
 
 pub struct AppState {
     pub pool: Pool,

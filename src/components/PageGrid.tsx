@@ -36,9 +36,11 @@ interface Props {
   onOpenEditor: (id: string) => void;
 }
 
+/** Device pixels, rounded up to 60 px steps so nearby sizes share cache entries
+ *  without rendering (and decoding) far more pixels than the thumbnail shows. */
 function renderWidth(cssWidth: number): number {
   const px = cssWidth * (window.devicePixelRatio || 1);
-  return Math.min(1200, Math.ceil(px / 120) * 120); // bucketed for cache hits
+  return Math.min(1200, Math.ceil(px / 60) * 60);
 }
 
 export function thumbRequest(page: PageItem, cssWidth: number, watermark: Watermark | null): RenderRequest {
@@ -83,17 +85,35 @@ export function useThumbnail(req: RenderRequest, visible: boolean) {
   return { url, error };
 }
 
+// One IntersectionObserver for every thumbnail (grid and filmstrip) instead of one
+// each: a 1000-page document would otherwise create 2000 observers.
+const watchers = new Map<Element, (visible: boolean) => void>();
+let sharedObserver: IntersectionObserver | null = null;
+
+function observe(el: Element, onChange: (visible: boolean) => void): () => void {
+  sharedObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) watchers.get(e.target)?.(e.isIntersecting);
+    },
+    { rootMargin: "400px 0px" },
+  );
+  const io = sharedObserver;
+  watchers.set(el, onChange);
+  io.observe(el);
+  return () => {
+    watchers.delete(el);
+    io.unobserve(el);
+  };
+}
+
+/** Whether the element is on screen or within 400 px of it. */
 export function useVisible<T extends Element>(): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), {
-      rootMargin: "400px 0px",
-    });
-    io.observe(el);
-    return () => io.disconnect();
+    return observe(el, setVisible);
   }, []);
   return [ref, visible];
 }
@@ -150,7 +170,7 @@ const Thumb = memo(function Thumb(p: ThumbProps) {
       </div>
       <div className="thumb-img" ref={boxRef} style={{ height }}>
         {url ? (
-          <img src={url} alt="" draggable={false} />
+          <img src={url} alt="" draggable={false} decoding="async" />
         ) : (
           <div className={`thumb-placeholder${error ? " error" : ""}`}>{error ? "Render failed" : ""}</div>
         )}

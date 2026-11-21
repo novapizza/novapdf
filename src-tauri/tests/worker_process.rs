@@ -153,3 +153,46 @@ fn worker_speaks_the_frame_protocol() {
     let status = w.child.wait().unwrap();
     assert!(status.success(), "worker exit status {status:?}");
 }
+
+/// Windows: the host shares document bytes through a read-only section instead of
+/// sending them, so the worker (already at Low integrity) maps them itself.
+#[cfg(windows)]
+#[test]
+fn worker_opens_documents_from_shared_memory() {
+    use std::os::windows::io::AsRawHandle;
+
+    use novapdf_lib::shared::win::Section;
+
+    let mut w = Worker::start();
+    let pdf = sample_pdf();
+    let section = Section::new(&pdf).unwrap();
+    let process = w.child.as_raw_handle();
+
+    let handle = section.share_with(process as _).unwrap();
+    let (pages, _) = w.ok(
+        json!({"op": "openShared", "docId": 7, "handle": handle, "len": pdf.len()}),
+        &[],
+    );
+    assert_eq!(pages, json!([{"width": 612.0, "height": 792.0}]));
+
+    // The host may drop its handle at once: the worker's view keeps the bytes alive.
+    drop(section);
+    let (_, png) = w.ok(
+        json!({"op": "render", "docId": 7, "pageIndex": 0, "width": 120, "format": "jpeg",
+               "edits": null, "watermark": null}),
+        &[],
+    );
+    assert!(png.starts_with(&[0xFF, 0xD8, 0xFF]));
+    let (text, _) = w.ok(json!({"op": "extract", "docId": 7, "pageIndex": 0}), &[]);
+    assert!(text["paragraphs"].to_string().contains("Hello worker"));
+
+    // Sizes are checked before mapping, and the handle is still closed.
+    let section = Section::new(&pdf).unwrap();
+    let handle = section.share_with(process as _).unwrap();
+    assert_eq!(
+        w.err(json!({"op": "openShared", "docId": 8, "handle": handle, "len": 0}), &[]),
+        "Invalid document size"
+    );
+
+    let _ = w.child.kill();
+}

@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use crate::protocol::{
     DocId, LayoutResult, PageInfo, Request, Response, read_frame, write_frame,
 };
+use crate::shared::Backing;
 use fonts::Fonts;
 use pdf::{Doc, Lib};
 
@@ -87,6 +88,25 @@ fn serve(lib: &Lib) -> i32 {
 
 type Reply = Result<(serde_json::Value, Vec<u8>), String>;
 
+fn open<'l>(lib: &'l Lib, docs: &mut HashMap<DocId, Doc<'l>>, doc_id: DocId, bytes: Backing) -> Reply {
+    if docs.len() >= MAX_OPEN_DOCS && !docs.contains_key(&doc_id) {
+        return Err("Too many open documents".into());
+    }
+    let doc = Doc::load_from(lib, bytes)?;
+    let count = doc.page_count();
+    if count <= 0 {
+        return Err("This PDF has no pages.".into());
+    }
+    let pages: Vec<PageInfo> = (0..count)
+        .map(|i| {
+            let (width, height) = doc.page_size(i).unwrap_or((612.0, 792.0));
+            PageInfo { width, height }
+        })
+        .collect();
+    docs.insert(doc_id, doc);
+    json(pages)
+}
+
 fn json<T: serde::Serialize>(v: T) -> Reply {
     serde_json::to_value(v)
         .map(|v| (v, Vec::new()))
@@ -101,23 +121,20 @@ fn handle<'l>(
     payload: Vec<u8>,
 ) -> Reply {
     match req {
-        Request::Open { doc_id } => {
-            if docs.len() >= MAX_OPEN_DOCS && !docs.contains_key(&doc_id) {
-                return Err("Too many open documents".into());
+        Request::Open { doc_id } => open(lib, docs, doc_id, Backing::Owned(payload)),
+        Request::OpenShared { doc_id, handle, len } => {
+            #[cfg(windows)]
+            {
+                // SAFETY: the host duplicated this section handle into our process for
+                // this request; `View::open` closes it.
+                let view = unsafe { crate::shared::win::View::open(handle, len) }?;
+                open(lib, docs, doc_id, Backing::Mapped(view))
             }
-            let doc = Doc::load(lib, payload)?;
-            let count = doc.page_count();
-            if count <= 0 {
-                return Err("This PDF has no pages.".into());
+            #[cfg(not(windows))]
+            {
+                let _ = (doc_id, handle, len);
+                Err("Shared documents are not supported on this platform".into())
             }
-            let pages: Vec<PageInfo> = (0..count)
-                .map(|i| {
-                    let (width, height) = doc.page_size(i).unwrap_or((612.0, 792.0));
-                    PageInfo { width, height }
-                })
-                .collect();
-            docs.insert(doc_id, doc);
-            json(pages)
         }
         Request::Close { doc_id } => {
             docs.remove(&doc_id);

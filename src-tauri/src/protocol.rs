@@ -13,6 +13,9 @@ pub type DocId = u32;
 
 pub const MAX_HEADER_BYTES: u32 = 64 * 1024 * 1024;
 pub const MAX_PAYLOAD_BYTES: u32 = 1536 * 1024 * 1024;
+/// Largest input PDF (checked by the host before reading, and by the worker before
+/// mapping a shared section).
+pub const MAX_DOC_BYTES: u64 = 512 * 1024 * 1024;
 
 // ---------- Edit model (shared with the UI, camelCase JSON) ----------
 
@@ -218,6 +221,11 @@ pub enum Request {
     /// Payload: the PDF bytes.
     #[serde(rename_all = "camelCase")]
     Open { doc_id: DocId },
+    /// No payload: the PDF bytes are in a read-only shared-memory section (Windows).
+    /// `handle` is a section handle the host has already duplicated into the worker
+    /// with map-read access only; the worker maps it and then closes the handle.
+    #[serde(rename_all = "camelCase")]
+    OpenShared { doc_id: DocId, handle: u64, len: u64 },
     #[serde(rename_all = "camelCase")]
     Close { doc_id: DocId },
     #[serde(rename_all = "camelCase")]
@@ -285,7 +293,10 @@ impl Request {
     /// Documents that must be loaded in the worker before this request runs.
     pub fn doc_ids(&self) -> Vec<DocId> {
         match self {
-            Request::Open { .. } | Request::Close { .. } | Request::Layout(_) => vec![],
+            Request::Open { .. }
+            | Request::OpenShared { .. }
+            | Request::Close { .. }
+            | Request::Layout(_) => vec![],
             Request::Render { doc_id, .. }
             | Request::Extract { doc_id, .. }
             | Request::FindWatermarks { doc_id, .. } => vec![*doc_id],

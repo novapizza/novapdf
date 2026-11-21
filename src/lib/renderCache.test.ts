@@ -158,7 +158,7 @@ describe("requestRender", () => {
     const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     let u = 0;
     vi.spyOn(URL, "createObjectURL").mockImplementation(() => `blob:big/${++u}`);
-    // 200 MB each: the budget (384 MB) holds one.
+    // 200 MB each: the view budget (128 MB) holds one (the newest always stays).
     tauriMock.handle("render_page", () => ({ byteLength: 0 }));
     const big = 200 * 1024 * 1024;
     vi.spyOn(globalThis, "Blob").mockImplementation(function (this: Blob) {
@@ -171,5 +171,42 @@ describe("requestRender", () => {
     expect(rc.cached(a)).toBeUndefined();
     expect(rc.cached(b)).toBeDefined();
     expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps separate budgets, so page views never evict thumbnails", async () => {
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    let u = 0;
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => `blob:kind/${++u}`);
+    let size = 1;
+    vi.spyOn(globalThis, "Blob").mockImplementation(function (this: Blob) {
+      return { size, type: "image/png" } as Blob;
+    } as unknown as typeof Blob);
+    tauriMock.handle("render_page", () => ({ byteLength: 0 }));
+
+    const thumb = req();
+    await rc.requestRender(thumb);
+    size = rc.BUDGET.view.bytes; // each view fills the view budget on its own
+    const views = Array.from({ length: 3 }, () => req({ priority: "view" }));
+    for (const v of views) await rc.requestRender(v);
+
+    expect(rc.cached(thumb)).toBeDefined();
+    expect(rc.cached(views[0])).toBeUndefined();
+    expect(rc.cached(views[1])).toBeUndefined();
+    expect(rc.cached(views[2])).toBeDefined();
+    expect(revoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps the number of entries per kind, least recently used first", async () => {
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    tauriMock.handle("render_page", () => new Uint8Array(1).buffer);
+    const max = rc.BUDGET.view.entries;
+    const views = Array.from({ length: max + 1 }, () => req({ priority: "view" }));
+    await rc.requestRender(views[0]);
+    await rc.requestRender(views[1]);
+    rc.cached(views[0]); // touch: views[1] is now the oldest
+    for (const v of views.slice(2)) await rc.requestRender(v);
+    expect(rc.cached(views[0])).toBeDefined();
+    expect(rc.cached(views[1])).toBeUndefined();
+    expect(rc.cached(views[max])).toBeDefined();
   });
 });

@@ -64,11 +64,9 @@ test("refuses paths the user never dropped (UI cannot read arbitrary files)", as
   await expect(toast(page, "This file was not dropped onto the window.")).toBeVisible();
 });
 
-// KNOWN BUG (App.tsx "files-dropped" handler): replace-vs-append is decided when the
-// drop arrives, so a second drop while the first file is still opening also
-// "replaces" and the first document is silently discarded. `test.fail` passes while
-// the bug exists; when it is fixed this goes red: change it to `test`.
-test.fail("a second drop while the first file is still opening merges both", async ({ app }) => {
+// Overlapping drops form one burst (App.tsx "files-dropped" handler): only the first
+// document opened into an empty window replaces it, the rest append.
+test("a second drop while the first file is still opening merges both", async ({ app }) => {
   const { page } = app;
   await app.drop([FIXTURES.sample]);
   await app.drop([FIXTURES.second]); // immediately, before sample.pdf has opened

@@ -138,5 +138,4 @@ once someone fixes it. When that happens, change the marker to `it` or `test`.
 | Test | Bug |
 |---|---|
 | `src/components/Inspector.test.tsx`: "clearing Size reverts…" | Clearing the *Size* field and leaving it sets the text to 1 pt. `Number("")` is 0, which is then clamped to the minimum. |
-| `e2e/open.spec.ts`: "a second drop while the first file is still opening…" | The `files-dropped` handler in `App.tsx` decides replace-vs-append when the drop arrives. A second drop while the first file is still opening also replaces, and the first document is silently discarded. |
 | `e2e/watermark.spec.ts`: "finds watermarks tagged the way the PDF spec and Acrobat do" | `/Artifact /Subtype` is a name in the PDF spec (`/Watermark`). `has_watermark_mark` only reads it as a string, and `draw_watermark` writes it as the string `(Watermark)`. Tagged watermarks from other tools are not found, and NovaPDF's own tags are not spec-compliant. |

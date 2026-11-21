@@ -227,16 +227,26 @@ mod more_tests {
     #[test]
     fn encode_produces_decodable_images() {
         // 2x1 RGBA: red, then blue. Alpha is dropped.
-        let rgba = [255, 0, 0, 255, 0, 0, 255, 0];
-        let png = encode(&rgba, 2, 1, ImageFormat::Png).unwrap();
+        let rgba = vec![255, 0, 0, 255, 0, 0, 255, 0];
+        let png = encode(rgba, 2, 1, ImageFormat::Png).unwrap();
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
         let img = image::load_from_memory(&png).unwrap().to_rgb8();
         assert_eq!(img.dimensions(), (2, 1));
         assert_eq!(img.get_pixel(0, 0).0, [255, 0, 0]);
         assert_eq!(img.get_pixel(1, 0).0, [0, 0, 255]);
 
-        let jpeg = encode(&[128; 4 * 16 * 8], 16, 8, ImageFormat::Jpeg).unwrap();
+        let jpeg = encode(vec![128; 4 * 16 * 8], 16, 8, ImageFormat::Jpeg).unwrap();
         assert!(jpeg.starts_with(&[0xFF, 0xD8, 0xFF]));
         assert_eq!(image::load_from_memory(&jpeg).unwrap().width(), 16);
+    }
+
+    #[test]
+    fn rgba_to_rgb_drops_alpha_in_place() {
+        let rgba = vec![1, 2, 3, 9, 4, 5, 6, 9, 7, 8, 9, 9];
+        let cap = rgba.capacity();
+        let rgb = rgba_to_rgb(rgba);
+        assert_eq!(rgb, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(rgb.capacity(), cap, "no second buffer is allocated");
+        assert!(rgba_to_rgb(Vec::new()).is_empty());
     }
 }

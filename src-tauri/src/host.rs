@@ -4,18 +4,26 @@
 //! never queue behind a flood of thumbnails; the remaining workers render thumbnails.
 //! Each worker loads documents lazily from bytes the host keeps in memory, so a
 //! crashed worker can be replaced transparently.
+//!
+//! Memory: document bytes are held once, in shared memory on Windows (see
+//! `shared.rs`). PDFium's per-document caches grow with every page a worker touches,
+//! so thumbnail workers are recycled after `RECYCLE_AFTER_RENDERS` renders, and any
+//! worker holding documents is stopped once it has been idle for a while
+//! (`trim_idle`). Both are cheap: a replacement maps the shared bytes again and
+//! PDFium parses lazily.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
 use crate::protocol::{DocId, PageInfo, Request, Response, async_io};
+use crate::shared::DocBytes;
 use crate::worker::WORKER_FLAG;
 
 pub const OPEN_TIMEOUT: Duration = Duration::from_secs(60);
@@ -23,6 +31,13 @@ pub const RENDER_TIMEOUT: Duration = Duration::from_secs(30);
 pub const EXTRACT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const SCAN_TIMEOUT: Duration = Duration::from_secs(180);
 pub const SAVE_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// A thumbnail worker is replaced after this many renders, which bounds PDFium's
+/// cache growth while scrolling through very long documents.
+pub const RECYCLE_AFTER_RENDERS: u32 = 300;
+/// Idle time after which a worker holding documents is stopped.
+pub const INTERACTIVE_IDLE: Duration = Duration::from_secs(180);
+pub const BACKGROUND_IDLE: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy)]
 pub enum Lane {
@@ -43,13 +58,26 @@ struct Proc {
 struct Slot {
     proc: Option<Proc>,
     loaded: HashSet<DocId>,
+    renders: u32,
+    last_used: Option<Instant>,
+}
+
+impl Slot {
+    /// Stops the worker. The next request starts a fresh one and reloads documents.
+    fn retire(&mut self) {
+        if let Some(mut p) = self.proc.take() {
+            let _ = p.child.start_kill();
+        }
+        self.loaded.clear();
+        self.renders = 0;
+    }
 }
 
 pub struct Pool {
     exe: PathBuf,
     lib_dir: Option<PathBuf>,
     workers: Vec<Mutex<Slot>>,
-    docs: RwLock<HashMap<DocId, Arc<Vec<u8>>>>,
+    docs: RwLock<HashMap<DocId, Arc<DocBytes>>>,
     next_doc: AtomicU32,
     next_bg: AtomicUsize,
 }
@@ -118,10 +146,7 @@ impl Pool {
         payload: &[u8],
         timeout: Duration,
     ) -> Result<(serde_json::Value, Vec<u8>), String> {
-        if slot.proc.is_none() {
-            slot.proc = Some(self.spawn()?);
-            slot.loaded.clear();
-        }
+        self.ensure_proc(slot)?;
         let header = serde_json::to_vec(req).map_err(|e| e.to_string())?;
         let proc = slot.proc.as_mut().unwrap();
 
@@ -135,10 +160,7 @@ impl Pool {
             Ok(Ok(frame)) => frame,
             other => {
                 let timed_out = other.is_err();
-                if let Some(mut p) = slot.proc.take() {
-                    let _ = p.child.start_kill();
-                }
-                slot.loaded.clear();
+                slot.retire();
                 return Err(if timed_out {
                     "The PDF engine took too long and was restarted. The file may be very complex or malformed.".into()
                 } else {
@@ -151,11 +173,44 @@ impl Pool {
             Ok(Response::Ok { result }) => Ok((result, resp_payload)),
             Ok(Response::Err { message }) => Err(message),
             Err(_) => {
-                if let Some(mut p) = slot.proc.take() {
-                    let _ = p.child.start_kill();
-                }
-                slot.loaded.clear();
+                slot.retire();
                 Err("The PDF engine sent an invalid reply and was restarted.".into())
+            }
+        }
+    }
+
+    fn ensure_proc(&self, slot: &mut Slot) -> Result<(), String> {
+        if slot.proc.is_none() {
+            slot.proc = Some(self.spawn()?);
+            slot.loaded.clear();
+            slot.renders = 0;
+        }
+        Ok(())
+    }
+
+    /// Loads one document into the slot's worker: by handing it the shared section
+    /// where possible, otherwise by sending the bytes.
+    async fn load(
+        &self,
+        slot: &mut Slot,
+        id: DocId,
+        bytes: &DocBytes,
+    ) -> Result<(serde_json::Value, Vec<u8>), String> {
+        match bytes {
+            DocBytes::Owned(v) => {
+                self.exchange(slot, &Request::Open { doc_id: id }, v, OPEN_TIMEOUT).await
+            }
+            #[cfg(windows)]
+            DocBytes::Shared(section) => {
+                self.ensure_proc(slot)?;
+                let process = slot
+                    .proc
+                    .as_ref()
+                    .and_then(|p| p.child.raw_handle())
+                    .ok_or("PDF engine exited")?;
+                let handle = section.share_with(process as _)?;
+                let req = Request::OpenShared { doc_id: id, handle, len: section.len() as u64 };
+                self.exchange(slot, &req, &[], OPEN_TIMEOUT).await
             }
         }
     }
@@ -169,6 +224,7 @@ impl Pool {
         {
             slot.proc = None;
             slot.loaded.clear();
+            slot.renders = 0;
         }
     }
 
@@ -206,8 +262,7 @@ impl Pool {
                 .get(&id)
                 .cloned()
                 .ok_or("This document has been closed.")?;
-            self.exchange(slot, &Request::Open { doc_id: id }, &bytes, OPEN_TIMEOUT)
-                .await?;
+            self.load(slot, id, &bytes).await?;
             slot.loaded.insert(id);
         }
         Ok(())
@@ -220,24 +275,61 @@ impl Pool {
         timeout: Duration,
     ) -> Result<(serde_json::Value, Vec<u8>), String> {
         let mut slot = self.lock(lane).await;
+        let is_render = matches!(req, Request::Render { .. });
         self.ensure_loaded(&mut slot, &req.doc_ids()).await?;
-        self.exchange(&mut slot, &req, &[], timeout).await
+        let result = self.exchange(&mut slot, &req, &[], timeout).await;
+        slot.last_used = Some(Instant::now());
+        if is_render && matches!(lane, Lane::Background) {
+            slot.renders += 1;
+            if slot.renders >= RECYCLE_AFTER_RENDERS {
+                slot.retire();
+            }
+        }
+        result
+    }
+
+    /// Starts the interactive worker ahead of the first request, so opening the
+    /// first file does not wait for a process launch and PDFium start-up.
+    pub async fn warm(&self) {
+        let mut slot = self.lock(Lane::Interactive).await;
+        if self.ensure_proc(&mut slot).is_ok() {
+            slot.last_used = Some(Instant::now());
+        }
+    }
+
+    /// Stops workers that hold documents and have been idle for a while, returning
+    /// PDFium's caches to the OS. Busy workers are skipped. A worker with nothing
+    /// loaded is left running: it is small and keeps the next request fast.
+    pub fn trim_idle(&self) {
+        for (i, w) in self.workers.iter().enumerate() {
+            let Ok(mut slot) = w.try_lock() else { continue };
+            Self::reap(&mut slot);
+            let idle = if i == 0 { INTERACTIVE_IDLE } else { BACKGROUND_IDLE };
+            let stale = slot.last_used.is_some_and(|t| t.elapsed() >= idle);
+            if slot.proc.is_some() && !slot.loaded.is_empty() && stale {
+                slot.retire();
+            }
+        }
     }
 
     /// Registers a document's bytes and parses it in the interactive worker.
     pub async fn open(&self, bytes: Vec<u8>) -> Result<(DocId, Vec<PageInfo>), String> {
         let id = self.next_doc.fetch_add(1, Ordering::Relaxed);
-        let bytes = Arc::new(bytes);
+        // Copying into shared memory touches every byte; keep it off the async threads.
+        let bytes = tokio::task::spawn_blocking(move || Arc::new(DocBytes::new(bytes)))
+            .await
+            .map_err(|e| e.to_string())?;
         self.docs.write().unwrap().insert(id, bytes.clone());
 
         let mut slot = self.lock(Lane::Interactive).await;
         let result = self
-            .exchange(&mut slot, &Request::Open { doc_id: id }, &bytes, OPEN_TIMEOUT)
+            .load(&mut slot, id, &bytes)
             .await
             .and_then(|(v, _)| serde_json::from_value::<Vec<PageInfo>>(v).map_err(|e| e.to_string()));
         match result {
             Ok(pages) => {
                 slot.loaded.insert(id);
+                slot.last_used = Some(Instant::now());
                 Ok((id, pages))
             }
             Err(e) => {

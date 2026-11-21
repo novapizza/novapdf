@@ -57,7 +57,16 @@ edit model (JSON)           restart, doc bytes kept in RAM   stdin/   edit.rs   
 * **Worker pool.** Worker 0 handles interactive work (page view, text extraction, save), and
   the others render thumbnails, so a 500-page thumbnail flood never blocks the editor.
   Workers load documents lazily from bytes the host keeps, so a crashed worker is replaced
-  transparently.
+  transparently. Worker 0 is started in the background at launch, so the first open does
+  not wait for PDFium to load.
+* **Memory.** A document's bytes are held once: on Windows the host copies them into an
+  anonymous shared-memory section and gives each worker a map-read-only handle
+  (`src-tauri/src/shared.rs`), instead of every process keeping its own copy. PDFium's
+  caches grow with every page a worker touches, so thumbnail workers are replaced after
+  300 renders and workers holding documents are stopped after being idle (30 s for
+  thumbnail workers, 3 min for worker 0). The UI keeps separate render-cache budgets for
+  thumbnails (96 MB) and page views (128 MB), and all thumbnails share one
+  IntersectionObserver.
 * **Fonts.** Embedded PDF fonts are not reused: they are usually subsets and may not be
   re-embeddable. New text uses a standard-14 font when the family matches and the text is
   WinAnsi (nothing embedded). Otherwise it uses an installed TrueType font that covers every

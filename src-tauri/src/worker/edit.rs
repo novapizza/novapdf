@@ -443,8 +443,21 @@ pub fn render_size(page_w: f32, page_h: f32, width: i32) -> (i32, i32) {
     (w.max(1), h.max(1))
 }
 
-fn encode(rgba: &[u8], w: i32, h: i32, format: ImageFormat) -> Result<Vec<u8>, String> {
-    let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+/// Drops the alpha channel in place, so a large page needs one pixel buffer, not two.
+fn rgba_to_rgb(mut px: Vec<u8>) -> Vec<u8> {
+    let n = px.len() / 4;
+    for i in 0..n {
+        let (s, d) = (i * 4, i * 3);
+        px[d] = px[s];
+        px[d + 1] = px[s + 1];
+        px[d + 2] = px[s + 2];
+    }
+    px.truncate(n * 3);
+    px
+}
+
+fn encode(rgba: Vec<u8>, w: i32, h: i32, format: ImageFormat) -> Result<Vec<u8>, String> {
+    let rgb = rgba_to_rgb(rgba);
     let mut out = Cursor::new(Vec::with_capacity(rgb.len() / 8));
     let res = match format {
         ImageFormat::Jpeg => JpegEncoder::new_with_quality(&mut out, 85).write_image(
@@ -456,6 +469,7 @@ fn encode(rgba: &[u8], w: i32, h: i32, format: ImageFormat) -> Result<Vec<u8>, S
         ImageFormat::Png => PngEncoder::new_with_quality(&mut out, CompressionType::Fast, FilterType::Sub)
             .write_image(&rgb, w as u32, h as u32, ExtendedColorType::Rgb8),
     };
+    drop(rgb);
     res.map_err(|e| format!("Could not encode the page image: {e}"))?;
     Ok(out.into_inner())
 }
@@ -467,7 +481,7 @@ fn render_loaded(page: &Page, width: i32, extra_quarter_turns: i32, format: Imag
     }
     let (w, h) = render_size(pw, ph, width);
     let rgba = page.render_rgba(w, h, extra_quarter_turns)?;
-    encode(&rgba, w, h, format)
+    encode(rgba, w, h, format)
 }
 
 #[allow(clippy::too_many_arguments)]
