@@ -669,20 +669,60 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 6px;
   min-width: 0;
 }
+.tab-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .doc-tab {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  max-width: 360px;
+  max-width: 240px;
   height: 32px;
-  padding: 0 14px;
+  padding: 0 6px 0 12px;
   border-radius: var(--r-lg);
-  background: var(--surface-high);
+  background: transparent;
   font-family: var(--font-label);
   font-size: 12.5px;
   font-weight: 500;
+  color: var(--secondary);
+  cursor: pointer;
+  flex: 0 1 auto;
+}
+.doc-tab:hover {
+  background: var(--surface-container);
+}
+.doc-tab.active {
+  background: var(--surface-high);
   color: var(--on-surface);
+}
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  flex: none;
+}
+.doc-tab:hover .tab-close,
+.doc-tab.active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+.tab-close:hover {
+  background: var(--surface-highest);
 }
 .doc-tab .icon {
   color: var(--primary);

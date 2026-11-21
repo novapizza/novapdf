@@ -1,18 +1,21 @@
 import type { Page } from "@playwright/test";
 import { basename } from "node:path";
 import { FIXTURES } from "./paths";
-import { expect, statusBar, test, toast } from "./app";
+import { type App, expect, statusBar, test, toast } from "./app";
 
 test.use({ appOptions: { grants: [FIXTURES.sample, FIXTURES.second] } });
 
 const thumb = (page: Page, n: number) => page.getByLabel(`Page ${n}`, { exact: true });
 
-async function openOrganizer(app: { page: Page; drop(p: string[]): Promise<void> }, files: string[], pages: number) {
-  // One at a time: a drop that arrives while another file is still opening replaces
-  // it instead of merging (known race, see TESTING.md).
-  for (const f of files) {
-    await app.drop([f]);
-    await expect(toast(app.page, `Opened ${basename(f)}`)).toBeVisible();
+async function openOrganizer(app: App, files: string[], pages: number) {
+  // The first file opens in a tab; the rest are merged into it.
+  const [first, ...rest] = files;
+  await app.drop([first]);
+  await expect(toast(app.page, `Opened ${basename(first)}`)).toBeVisible();
+  if (rest.length) {
+    app.pick(rest);
+    await app.page.keyboard.press("Control+Shift+O");
+    await expect(toast(app.page, /^Merged /)).toBeVisible();
   }
   await expect(statusBar(app.page)).toContainText(`of ${pages}`);
   await app.page.getByRole("button", { name: /Page Organizer/ }).click();

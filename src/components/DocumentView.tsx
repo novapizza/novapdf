@@ -19,7 +19,7 @@ import { EMPTY_EDITS, editsAreEmpty } from "../lib/types";
 import { type DocInfo, type PageItem, type ParagraphLink, displaySize } from "../state/workspace";
 import { Inspector, LinkEditor } from "./Inspector";
 import { Icon } from "./Icon";
-import { type Editing, PageSurface, type Selection, type SurfaceActions } from "./PageSurface";
+import { type Editing, PageSurface, STRIP_W, type Selection, type SurfaceActions } from "./PageSurface";
 import { thumbRequest, useThumbnail, useVisible } from "./PageGrid";
 import { EmptyNote } from "./Shell";
 
@@ -829,6 +829,9 @@ export function DocumentView(props: DocumentViewProps) {
               const page = pages[i];
               const size = geo.sizes[i];
               const w = Math.round(size.width * geo.scale);
+              // The page being read first, then the rest on screen, then the overscan.
+              const onScreen = geo.tops[i] < scrollTop + vh && geo.tops[i] + geo.heights[i] > scrollTop;
+              const rank = Math.abs(i - currentIndex) + (onScreen ? 0 : pages.length);
               return (
                 <PageSurface
                   key={page.id}
@@ -847,6 +850,7 @@ export function DocumentView(props: DocumentViewProps) {
                   editing={editing?.pageId === page.id ? editing.e : null}
                   linkedBlocks={linkedByPage.get(page.id) ?? null}
                   pickTarget={pickTargetId === page.id}
+                  rank={rank}
                   locked={!!draft}
                   actions={actions}
                 />
@@ -962,8 +966,6 @@ function PageJump(props: { current: number; count: number; onJump: (n: number) =
     </span>
   );
 }
-
-const STRIP_W = 148;
 
 /** Left pane: page thumbnails, plus outline and marks tabs (not built yet). */
 function Filmstrip(props: {

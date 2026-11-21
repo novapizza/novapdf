@@ -3,10 +3,18 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import { errorMessage } from "../lib/api";
 import { cssFamily, estimateBlockBox } from "../lib/fontCss";
 import { loadPageText } from "../lib/pageText";
-import { requestRender } from "../lib/renderCache";
+import type { RenderRequest } from "../lib/api";
+import { cached, requestRender } from "../lib/renderCache";
 import type { LooseText, PageEdits, PageText, Paragraph, TextBlock, Watermark } from "../lib/types";
 import { editsAreEmpty } from "../lib/types";
 import type { PageItem } from "../state/workspace";
+import { thumbRequest } from "./PageGrid";
+
+/** Width of the filmstrip thumbnails, whose cached images double as placeholders. */
+export const STRIP_W = 148;
+/** Pages that mount further from the reader wait this long, so pages that fly past
+ *  while scrolling never hit the worker. */
+const RENDER_DELAY_MS = 90;
 
 export type Selection =
   | { kind: "block"; id: string }
@@ -55,6 +63,9 @@ interface Props {
   linkedBlocks: ReadonlySet<string> | null;
   /** In "pick" mode this page holds the paragraph to link to. */
   pickTarget: boolean;
+  /** Render order: 0 is the page the reader is on, then visible pages, then the rest.
+   *  A page that mounts with rank 0 (a jump to it) renders without delay. */
+  rank: number;
   /** Overlays are shown but do not respond (for example while a linked paragraph is edited). */
   locked: boolean;
   actions: SurfaceActions;
@@ -68,26 +79,43 @@ export const PageSurface = memo(function PageSurface(p: Props) {
   const rotation = editMode ? 0 : page.rotation;
 
   // ---- page image (real PDFium output, with edits) ----
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [rendering, setRendering] = useState(true);
+  const rank = useRef(p.rank);
+  rank.current = p.rank;
   const renderWidth = Math.min(4000, Math.ceil((cssW * (window.devicePixelRatio || 1)) / 200) * 200);
+  const viewRequest = (): RenderRequest => ({
+    docId: page.docId,
+    pageIndex: page.pageIndex,
+    width: renderWidth,
+    format: "png",
+    rotation,
+    edits: editsAreEmpty(edits) ? null : edits,
+    watermark: p.watermark,
+    priority: "view",
+  });
+  // A page rendered before (another tab, scrolling back) shows at once.
+  const [imageUrl, setImageUrl] = useState<string | null>(() => cached(viewRequest()) ?? null);
+  const [rendering, setRendering] = useState(imageUrl == null);
+  // Until then, the filmstrip thumbnail (usually cached already) stands in, scaled up.
+  const [placeholder] = useState(() =>
+    imageUrl == null && (!editMode || page.rotation === 0)
+      ? cached(thumbRequest(page, STRIP_W, p.watermark))
+      : undefined,
+  );
   const editsKey = JSON.stringify(edits);
   const wmKey = JSON.stringify(p.watermark);
   useEffect(() => {
+    const req = viewRequest();
+    const hit = cached(req);
+    if (hit) {
+      setImageUrl(hit);
+      setRendering(false);
+      return;
+    }
     let alive = true;
+    const ctrl = new AbortController();
     setRendering(true);
-    // Short delay: pages that fly past while scrolling never hit the worker.
-    const t = setTimeout(() => {
-      requestRender({
-        docId: page.docId,
-        pageIndex: page.pageIndex,
-        width: renderWidth,
-        format: "png",
-        rotation,
-        edits: editsAreEmpty(edits) ? null : edits,
-        watermark: p.watermark,
-        priority: "view",
-      }).then(
+    const start = () =>
+      requestRender(req, ctrl.signal, () => rank.current).then(
         (url) => {
           if (!alive) return;
           setImageUrl(url);
@@ -99,10 +127,11 @@ export const PageSurface = memo(function PageSurface(p: Props) {
           actions.error(`Page ${p.number}: ${errorMessage(e)}`);
         },
       );
-    }, 90);
+    const t = rank.current === 0 ? (start(), undefined) : setTimeout(start, RENDER_DELAY_MS);
     return () => {
       alive = false;
       clearTimeout(t);
+      ctrl.abort(); // not started yet: drop it, the reader moved on
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.docId, page.pageIndex, renderWidth, rotation, editsKey, wmKey]);
@@ -115,12 +144,16 @@ export const PageSurface = memo(function PageSurface(p: Props) {
     if (!editMode) return;
     let alive = true;
     setTextError(null);
-    loadPageText(page.docId, page.pageIndex).then(
-      (t) => alive && setPageText(t),
-      (e) => alive && setTextError(errorMessage(e)),
-    );
+    const start = () =>
+      loadPageText(page.docId, page.pageIndex).then(
+        (t) => alive && setPageText(t),
+        (e) => alive && setTextError(errorMessage(e)),
+      );
+    // Same rule as the image: pages scrolled past never ask the worker for text.
+    const t = rank.current === 0 ? (start(), undefined) : setTimeout(start, RENDER_DELAY_MS);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
   }, [editMode, page.docId, page.pageIndex, attempt]);
 
@@ -157,7 +190,11 @@ export const PageSurface = memo(function PageSurface(p: Props) {
         actions.clickEmpty(page.id, toPage(e));
       }}
     >
-      {imageUrl && <img className="page-image" src={imageUrl} alt={`Page ${p.number}`} draggable={false} />}
+      {imageUrl ? (
+        <img className="page-image" src={imageUrl} alt={`Page ${p.number}`} draggable={false} />
+      ) : (
+        placeholder && <img className="page-image placeholder" src={placeholder} alt="" draggable={false} />
+      )}
       {rendering && <span className="spinner page-spinner" aria-label="Rendering" />}
 
       {showParas &&

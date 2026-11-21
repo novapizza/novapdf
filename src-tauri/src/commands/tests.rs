@@ -273,3 +273,48 @@ fn outcomes_serialize_as_the_ui_expects() {
     let saved = SaveOutcome { path: "C:\\x.pdf".into(), warnings: vec!["w".into()] };
     assert_eq!(serde_json::to_value(&saved).unwrap(), json!({"path": "C:\\x.pdf", "warnings": ["w"]}));
 }
+
+// ---------- open-file de-duplication ----------
+
+fn letter() -> Vec<PageInfo> {
+    serde_json::from_value(json!([{ "width": 612.0, "height": 792.0 }])).unwrap()
+}
+
+#[test]
+fn open_files_hand_back_the_same_document_while_unchanged() {
+    let mut files = OpenFiles::default();
+    let path = PathBuf::from("C:/docs/a.pdf");
+    let stamp: FileStamp = (100, None);
+    assert!(files.lookup(&path, stamp).is_none());
+    files.remember(path.clone(), stamp, 7, letter());
+    let (doc_id, pages) = files.lookup(&path, stamp).unwrap();
+    assert_eq!(doc_id, 7);
+    assert_eq!(pages.len(), 1);
+    // Changed on disk (another size or time): opened afresh.
+    assert!(files.lookup(&path, (101, None)).is_none());
+    assert!(files.lookup(&PathBuf::from("C:/docs/b.pdf"), stamp).is_none());
+}
+
+#[test]
+fn open_files_forget_a_closed_document() {
+    let mut files = OpenFiles::default();
+    files.remember(PathBuf::from("a.pdf"), (1, None), 1, letter());
+    files.remember(PathBuf::from("b.pdf"), (1, None), 2, letter());
+    files.forget(1);
+    assert!(files.lookup(&PathBuf::from("a.pdf"), (1, None)).is_none());
+    assert!(files.lookup(&PathBuf::from("b.pdf"), (1, None)).is_some());
+}
+
+#[test]
+fn identify_uses_the_canonical_path_and_tracks_changes() {
+    let dir = TempDir::new();
+    let path = dir.path("x.pdf");
+    std::fs::write(&path, b"%PDF-1.7").unwrap();
+    let (key, stamp) = identify(&path).unwrap();
+    // The same file through a different spelling of its path has the same key.
+    let (again, _) = identify(&dir.0.join(".").join("x.pdf")).unwrap();
+    assert_eq!(key, again);
+    std::fs::write(&path, b"%PDF-1.7 longer").unwrap();
+    assert_ne!(identify(&path).unwrap().1, stamp);
+    assert!(identify(&dir.path("missing.pdf")).is_none());
+}

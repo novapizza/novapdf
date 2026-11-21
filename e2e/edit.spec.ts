@@ -136,7 +136,9 @@ test.describe("rotation and page order", () => {
     const { page } = app;
     await app.drop([FIXTURES.sample]);
     await expect(toast(page, "Opened sample.pdf")).toBeVisible();
-    await app.drop([FIXTURES.second]);
+    app.pick([FIXTURES.second]);
+    await page.keyboard.press("Control+Shift+O"); // Merge into this document
+    await expect(toast(page, "Merged second.pdf (2 pages)")).toBeVisible();
     await expect(statusBar(page)).toContainText("of 5");
     await page.getByRole("button", { name: /Page Organizer/ }).click();
     // Delete sample pages 2-3, rotate the first second.pdf page.

@@ -161,7 +161,7 @@ export function Library(props: {
 }) {
   const hasDoc = props.docs.length > 0;
   const actions: QuickAction[] = [
-    { icon: "merge", title: "Merge PDFs", sub: "Add files and combine pages", run: hasDoc ? props.onAdd : props.onOpen },
+    { icon: "merge", title: "Merge PDFs", sub: "Combine files into one document", run: props.onAdd },
     { icon: "stamp", title: "Watermark", sub: "Stamp text on every page", run: hasDoc ? props.onWatermark : undefined },
     { icon: "eraser", title: "Remove watermarks", sub: "Find and strip stamps", run: hasDoc ? props.onClean : undefined },
     { icon: "compress", title: "Compress", sub: "Coming soon" },
