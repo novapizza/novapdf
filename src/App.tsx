@@ -7,12 +7,13 @@ import { api, errorMessage } from "./lib/api";
 import type { OpenOutcome, PageEdits, Watermark } from "./lib/types";
 import { editsAreEmpty } from "./lib/types";
 import {
+  type Action,
   type DocInfo,
   type ParagraphLink,
   initialHistory,
   pagesFromDoc,
-  reducer,
 } from "./state/workspace";
+import { type Tab, activeTab, initialTabs, isDirty, neighbourTab, referencedDocs, tabsReducer } from "./state/tabs";
 import { PageGrid } from "./components/PageGrid";
 import { DocumentView } from "./components/DocumentView";
 import { WatermarkDialog } from "./components/WatermarkDialog";
@@ -30,17 +31,31 @@ type Dialog = null | { kind: "watermark" } | { kind: "clean"; text: string; docI
 let toastId = 0;
 
 export default function App() {
-  const [history, dispatch] = useReducer(reducer, initialHistory);
+  const [tabState, tabsDispatch] = useReducer(tabsReducer, initialTabs);
+  const tab = activeTab(tabState);
+  const tabId = tab?.id ?? null;
+  const history = tab?.history ?? initialHistory;
   const ws = history.present;
-  const dirty = history.present !== history.saved && ws.pages.length > 0;
+  const dirty = tab ? isDirty(tab) : false;
+  /** Page shown in the document view (kept per tab, and when switching views). */
+  const currentPageId = tab?.currentPageId ?? null;
 
+  /** Applies a workspace action to the front tab. */
+  const dispatch = useCallback(
+    (action: Action) => tabId && tabsDispatch({ type: "edit", id: tabId, action }),
+    [tabId],
+  );
+  const setCurrentPageId = useCallback(
+    (pageId: string | null) => tabId && tabsDispatch({ type: "setCurrentPage", id: tabId, pageId }),
+    [tabId],
+  );
+
+  /** Every open document, shared by the tabs (a merged file can appear in several). */
   const [docs, setDocs] = useState<Map<number, DocInfo>>(new Map());
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
   const [section, setSection] = useState<Section>("library");
   const docMode = section === "read" || section === "edit" ? section : null;
-  /** Page shown in the document view (kept when switching views). */
-  const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [thumbWidth, setThumbWidth] = useState(170);
   const [sanitize, setSanitize] = useState(true);
   const [theme, setTheme] = useTheme();
@@ -60,41 +75,55 @@ export default function App() {
   }, []);
 
   // Keep refs for event handlers registered once.
-  const stateRef = useRef({ ws, dirty, docs });
-  stateRef.current = { ws, dirty, docs };
-  const drops = useRef({ pending: 0, startedEmpty: false, opened: false, chain: Promise.resolve() });
+  const stateRef = useRef({ ws, tabs: tabState.tabs, tabId, section });
+  stateRef.current = { ws, tabs: tabState.tabs, tabId, section };
+  const drops = useRef({ pending: 0, chain: Promise.resolve() });
+
+  // Selection belongs to the tab in front: switching tabs clears it.
+  useEffect(() => {
+    setSelection(new Set());
+    setAnchor(null);
+  }, [tabId]);
 
   // ---------- opening ----------
 
+  /** "tabs" opens each file in its own tab (or switches to it if it is already
+   *  open); "merge" appends the files' pages to the front tab, or with no tab open,
+   *  combines them into one new tab. Either way the result shows in the document view. */
   const addOutcomes = useCallback(
-    (outcomes: OpenOutcome[], mode: "replace" | "append") => {
+    (outcomes: OpenOutcome[], mode: "tabs" | "merge") => {
       for (const o of outcomes) if (o.error) notify(`${o.fileName}: ${o.error}`, "error");
       const opened: DocInfo[] = outcomes.flatMap((o) => (o.document ? [o.document] : []));
       if (opened.length === 0) return;
-      const items = opened.flatMap(pagesFromDoc);
-      if (mode === "replace") {
-        for (const id of stateRef.current.docs.keys()) api.closeDocument(id).catch(() => {});
-        setDocs(new Map(opened.map((d) => [d.docId, d])));
-        dispatch({ type: "reset", pages: items });
-        setSelection(new Set());
-        setCurrentPageId(items[0]?.id ?? null);
-        setSection("read");
-      } else {
-        setDocs((prev) => new Map([...prev, ...opened.map((d) => [d.docId, d] as const)]));
-        dispatch({ type: "append", pages: items });
+      setDocs((prev) => new Map([...prev, ...opened.map((d) => [d.docId, d] as const)]));
+      const { tabs, tabId: front, section: from } = stateRef.current;
+      const inDocument = from === "read" || from === "edit" || from === "grid";
+      const count = (docs: DocInfo[]) => {
+        const pages = docs.reduce((n, d) => n + d.pages.length, 0);
+        return `${docs.length === 1 ? docs[0].fileName : `${docs.length} files`} (${pages} page${pages === 1 ? "" : "s"})`;
+      };
+      if (!inDocument) setSection("read");
+      if (mode === "merge") {
+        if (front) {
+          const pages = opened.flatMap(pagesFromDoc);
+          tabsDispatch({ type: "edit", id: front, action: { type: "append", pages } });
+          // Coming from the Library: show where the merged pages start.
+          if (!inDocument && pages[0]) tabsDispatch({ type: "setCurrentPage", id: front, pageId: pages[0].id });
+        } else {
+          tabsDispatch({ type: "openMerged", docs: opened });
+        }
+        notify(`Merged ${count(opened)}`);
+        return;
       }
-      const pages = items.length;
-      notify(`Opened ${opened.length === 1 ? opened[0].fileName : `${opened.length} files`} (${pages} page${pages === 1 ? "" : "s"})`);
+      const fresh = opened.filter((d) => !tabs.some((t) => t.docId === d.docId && !t.merged));
+      for (const d of opened) tabsDispatch({ type: "open", doc: d });
+      if (fresh.length) notify(`Opened ${count(fresh)}`);
+      for (const d of opened) if (!fresh.includes(d)) notify(`${d.fileName} is already open`);
     },
     [notify],
   );
 
-  const confirmDiscard = async () =>
-    !stateRef.current.dirty ||
-    (await ask("You have unsaved changes. Discard them?", { title: "NovaPDF", kind: "warning" }));
-
-  const openFiles = async (mode: "replace" | "append") => {
-    if (mode === "replace" && !(await confirmDiscard())) return;
+  const openFiles = async (mode: "tabs" | "merge") => {
     try {
       setBusy("Opening…");
       addOutcomes(await api.openWithDialog(), mode);
@@ -106,25 +135,16 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Drops that overlap (a second drop while the first is still opening) form one
-    // burst. Results are applied in drop order, and only the first document opened
-    // into an empty workspace replaces it; everything after that appends. Deciding
-    // this when each drop arrives would let a later drop "replace" an earlier one.
+    // Dropped files open in new tabs. Drops that overlap (a second drop while the
+    // first is still opening) are applied in drop order, so tabs appear in that order.
     const un = listen<string[]>("files-dropped", (e) => {
       const d = drops.current;
-      if (d.pending === 0) {
-        d.startedEmpty = stateRef.current.ws.pages.length === 0;
-        d.opened = false;
-      }
       d.pending += 1;
       setBusy("Opening…");
       const opening = api.openDropped(e.payload);
       d.chain = d.chain.then(async () => {
         try {
-          const outcomes = await opening;
-          const mode = d.startedEmpty && !d.opened ? "replace" : "append";
-          if (outcomes.some((o) => o.document)) d.opened = true;
-          addOutcomes(outcomes, mode);
+          addOutcomes(await opening, "tabs");
         } catch (err) {
           notify(errorMessage(err), "error");
         } finally {
@@ -141,8 +161,10 @@ export default function App() {
   // Unsaved-changes guard on window close.
   useEffect(() => {
     const un = getCurrentWindow().onCloseRequested(async (event) => {
-      if (stateRef.current.dirty) {
-        const ok = await ask("You have unsaved changes. Quit anyway?", { title: "NovaPDF", kind: "warning" });
+      const unsaved = stateRef.current.tabs.filter(isDirty).length;
+      if (unsaved) {
+        const what = unsaved === 1 ? "You have unsaved changes" : `${unsaved} documents have unsaved changes`;
+        const ok = await ask(`${what}. Quit anyway?`, { title: "NovaPDF", kind: "warning" });
         if (!ok) event.preventDefault();
       }
     });
@@ -151,12 +173,40 @@ export default function App() {
     };
   }, []);
 
+  // ---------- tabs ----------
+
+  const closeTab = async (id: string) => {
+    const t = stateRef.current.tabs.find((x) => x.id === id);
+    if (!t) return;
+    if (isDirty(t) && !(await ask(`${t.title} has unsaved changes. Close it anyway?`, { title: "NovaPDF", kind: "warning" })))
+      return;
+    const rest = stateRef.current.tabs.filter((x) => x.id !== id);
+    tabsDispatch({ type: "close", id });
+    if (rest.length === 0) setSection("library");
+    // Free documents no other tab uses (not even through undo).
+    const keep = referencedDocs(rest);
+    const release = [...referencedDocs([t])].filter((d) => !keep.has(d));
+    for (const d of release) api.closeDocument(d).catch(() => {});
+    if (release.length)
+      setDocs((prev) => {
+        const next = new Map(prev);
+        for (const d of release) next.delete(d);
+        return next;
+      });
+  };
+
+  /** Clicking a tab brings its document up, also from the Library or another section. */
+  const activateTab = (id: string) => {
+    tabsDispatch({ type: "activate", id });
+    if (!docMode && section !== "grid") setSection("read");
+  };
+
   // ---------- saving ----------
 
   const save = async () => {
-    if (ws.pages.length === 0 || busy) return;
-    const first = docs.get(ws.pages[0].docId)?.fileName ?? "document.pdf";
-    const suggestedName = first.replace(/\.pdf$/i, "") + "-edited.pdf";
+    if (!tab || ws.pages.length === 0 || busy) return;
+    const savingTab = tab.id; // the user may switch tabs while the dialog is open
+    const suggestedName = tab.title.replace(/\.pdf$/i, "") + "-edited.pdf";
     try {
       setBusy("Saving…");
       const saved = await api.saveWithDialog({
@@ -171,7 +221,7 @@ export default function App() {
         suggestedName,
       });
       if (saved) {
-        dispatch({ type: "markSaved" });
+        tabsDispatch({ type: "edit", id: savingTab, action: { type: "markSaved" } });
         notify(`Saved ${saved.path}`);
         for (const w of saved.warnings) notify(w, "error");
       }
@@ -236,7 +286,7 @@ export default function App() {
   const changeEdits = useCallback(
     (updates: { id: string; edits: PageEdits }[], links?: ParagraphLink[]) =>
       dispatch({ type: "setEdits", updates, links }),
-    [],
+    [dispatch],
   );
 
   const applyClean = (results: ScanResult[]) => {
@@ -272,7 +322,14 @@ export default function App() {
         save();
       } else if (mod && e.key.toLowerCase() === "o") {
         e.preventDefault();
-        openFiles(e.shiftKey ? "append" : "replace");
+        openFiles(e.shiftKey ? "merge" : "tabs");
+      } else if (mod && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        if (tabId) closeTab(tabId);
+      } else if (mod && e.key === "Tab") {
+        e.preventDefault();
+        const next = neighbourTab(tabState, e.shiftKey ? -1 : 1);
+        if (next) tabsDispatch({ type: "activate", id: next });
       } else if (typing) {
         return;
       } else if (mod && e.key.toLowerCase() === "z") {
@@ -312,7 +369,6 @@ export default function App() {
     const ids = new Set(ws.pages.map((p) => p.docId));
     return [...docs.values()].filter((d) => ids.has(d.docId));
   }, [docs, ws.pages]);
-  const firstDoc = docsInUse[0];
   const soon = !!SECTION_INFO[section].soon;
 
   const openWatermark = () => setDialog({ kind: "watermark" });
@@ -322,8 +378,10 @@ export default function App() {
 
   const ifDoc = (f: () => void) => (hasDoc ? f : undefined);
   const commands: Command[] = [
-    { id: "open", title: "Open PDF", description: "Replace the workspace with one or more PDF files", icon: "folderOpen", tag: "Action", shortcut: "Ctrl O", run: () => openFiles("replace") },
-    { id: "add", title: "Add PDFs to merge", description: "Append pages from more files to this workspace", icon: "merge", tag: "Action", shortcut: "Ctrl ⇧ O", run: ifDoc(() => openFiles("append")) },
+    { id: "open", title: "Open PDF", description: "Open one or more PDF files, each in its own tab", icon: "folderOpen", tag: "Action", shortcut: "Ctrl O", run: () => openFiles("tabs") },
+    { id: "add", title: hasDoc ? "Merge PDFs into this document" : "Merge PDFs", description: hasDoc ? "Append pages from more files to the current tab" : "Combine several files into one new tab", icon: "merge", tag: "Action", shortcut: "Ctrl ⇧ O", run: () => openFiles("merge") },
+    { id: "close", title: "Close tab", description: "Close the current document", icon: "x", tag: "Action", shortcut: "Ctrl W", run: tabId ? () => closeTab(tabId) : undefined },
+    { id: "next-tab", title: "Next tab", description: "Switch to the next open document", icon: "chevronRight", tag: "View", shortcut: "Ctrl Tab", run: tabState.tabs.length > 1 ? () => tabsDispatch({ type: "activate", id: neighbourTab(tabState, 1)! }) : undefined },
     { id: "save", title: "Save as new PDF", description: "Write the workspace to a new file", icon: "save", tag: "Action", shortcut: "Ctrl S", run: ifDoc(save) },
     { id: "wm", title: "Watermark Studio: add a text stamp", description: "Text, typeface, size, angle and opacity on every page", icon: "stamp", tag: "Tool", run: ifDoc(openWatermark) },
     { id: "clean", title: "Remove existing watermarks", description: "Scan for tagged stamps, watermark annotations and matching text", icon: "eraser", tag: "Tool", run: ifDoc(openClean) },
@@ -357,21 +415,27 @@ export default function App() {
       <div className="workspace">
         <header className="topbar">
           <div className="tabs">
-            {firstDoc ? (
-              <div className="doc-tab" title={docsInUse.map((d) => d.fileName).join("\n")}>
-                <Icon name="fileText" size={16} />
-                <span className="name">{firstDoc.fileName}</span>
-                {docsInUse.length > 1 && <span className="count">+{docsInUse.length - 1}</span>}
-                {dirty && <span className="dirty-dot" title="Unsaved changes" />}
+            {tabState.tabs.length > 0 ? (
+              <div className="tab-list" role="tablist" aria-label="Open documents">
+                {tabState.tabs.map((t) => (
+                  <DocTab
+                    key={t.id}
+                    tab={t}
+                    docs={docs}
+                    active={t.id === tabId}
+                    onActivate={() => activateTab(t.id)}
+                    onClose={() => closeTab(t.id)}
+                  />
+                ))}
               </div>
             ) : (
               <span className="doc-tab empty-tab">No document open</span>
             )}
             <button
               className="ghost icon-btn"
-              onClick={() => openFiles(hasDoc ? "append" : "replace")}
-              title={hasDoc ? "Add PDFs to merge (Ctrl+Shift+O)" : "Open PDF (Ctrl+O)"}
-              aria-label={hasDoc ? "Add PDFs" : "Open PDF"}
+              onClick={() => openFiles("tabs")}
+              title="Open PDF in a new tab (Ctrl+O)"
+              aria-label="Open PDF in a new tab"
             >
               <Icon name="plus" />
             </button>
@@ -390,7 +454,7 @@ export default function App() {
               <Icon name="redo" />
             </button>
           </div>
-          <button className="secondary" onClick={() => openFiles("replace")} title="Open PDF (Ctrl+O)">
+          <button className="secondary" onClick={() => openFiles("tabs")} title="Open PDF (Ctrl+O)">
             <Icon name="folderOpen" size={16} /> Open
           </button>
           <button className="primary" onClick={save} disabled={!hasDoc || !!busy} title="Save as (Ctrl+S)">
@@ -467,8 +531,8 @@ export default function App() {
               docs={docsInUse}
               pageCount={ws.pages.length}
               dirty={dirty}
-              onOpen={() => openFiles("replace")}
-              onAdd={() => openFiles("append")}
+              onOpen={() => openFiles("tabs")}
+              onAdd={() => openFiles("merge")}
               onShow={navigate}
               onWatermark={openWatermark}
               onClean={openClean}
@@ -481,13 +545,14 @@ export default function App() {
                 </span>
                 <h1>{SECTION_INFO[section].label}</h1>
                 <p>Open a PDF to start. You can also drop PDF files anywhere in this window.</p>
-                <button className="primary big" onClick={() => openFiles("replace")}>
+                <button className="primary big" onClick={() => openFiles("tabs")}>
                   <Icon name="folderOpen" /> Open PDF…
                 </button>
               </div>
             </div>
           ) : docMode ? (
             <DocumentView
+              key={tabId}
               pages={ws.pages}
               docs={docs}
               links={ws.links}
@@ -510,7 +575,7 @@ export default function App() {
                 </span>
                 <div className="organizer-title">
                   <h1>
-                    <span className="name">{firstDoc?.fileName ?? "Workspace"}</span>
+                    <span className="name">{tab?.title ?? "Workspace"}</span>
                     <span className="chip">
                       {ws.pages.length} page{ws.pages.length === 1 ? "" : "s"}
                       {docsInUse.length > 1 ? ` · ${docsInUse.length} files` : ""}
@@ -538,6 +603,7 @@ export default function App() {
                 </div>
               </div>
               <PageGrid
+                key={tabId}
                 pages={ws.pages}
                 docs={docs}
                 watermark={ws.watermark}
@@ -634,6 +700,50 @@ export default function App() {
       )}
       {dialog?.kind === "palette" && <CommandPalette commands={commands} onClose={() => setDialog(null)} />}
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+    </div>
+  );
+}
+
+/** One tab in the top bar. Middle-click closes it, like a browser tab. */
+function DocTab(props: {
+  tab: Tab;
+  docs: Map<number, DocInfo>;
+  active: boolean;
+  onActivate: () => void;
+  onClose: () => void;
+}) {
+  const { tab, active } = props;
+  const files = [...new Set(tab.history.present.pages.map((p) => p.docId))];
+  const merged = files.filter((d) => d !== tab.docId).length;
+  const tip = [tab.title, ...files.filter((d) => d !== tab.docId).map((d) => props.docs.get(d)?.fileName ?? "")]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <div
+      className={`doc-tab${active ? " active" : ""}`}
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
+      title={tip}
+      onClick={props.onActivate}
+      onAuxClick={(e) => e.button === 1 && props.onClose()}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && props.onActivate()}
+    >
+      <Icon name="fileText" size={16} />
+      <span className="name">{tab.title}</span>
+      {merged > 0 && <span className="count">+{merged}</span>}
+      {isDirty(tab) && <span className="dirty-dot" title="Unsaved changes" />}
+      <button
+        className="tab-close"
+        aria-label={`Close ${tab.title}`}
+        title="Close (Ctrl+W)"
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onClose();
+        }}
+      >
+        <Icon name="x" size={13} />
+      </button>
     </div>
   );
 }

@@ -93,6 +93,55 @@ describe("requestRender", () => {
     expect(pending).toHaveLength(4);
   });
 
+  it("sends at most two page views at once and runs the lowest rank next", async () => {
+    const pending = manualBackend();
+    const ranks = new Map<number, number>();
+    const view = (rank: number) => {
+      const r = req({ priority: "view" });
+      ranks.set(r.pageIndex, rank);
+      return { r, p: rc.requestRender(r, undefined, () => ranks.get(r.pageIndex)!) };
+    };
+    const jobs = [view(3), view(2), view(5), view(1), view(4)];
+    expect(pending).toHaveLength(2);
+    // Ranks are read when a job is picked: the reader moved, so job 2 is now nearest.
+    ranks.set(jobs[2].r.pageIndex, 0);
+    pending[0].resolve();
+    await flush();
+    expect(pending[2].args.pageIndex).toBe(jobs[2].r.pageIndex);
+    pending[1].resolve();
+    await flush();
+    expect(pending[3].args.pageIndex).toBe(jobs[3].r.pageIndex);
+    pending[2].resolve();
+    await flush();
+    expect(pending[4].args.pageIndex).toBe(jobs[4].r.pageIndex);
+    for (const p of pending.slice(3)) p.resolve();
+    await Promise.all(jobs.map((j) => j.p));
+  });
+
+  it("page views without a rank run in request order", async () => {
+    const pending = manualBackend();
+    const reqs = Array.from({ length: 3 }, () => req({ priority: "view" }));
+    const results = reqs.map((r) => rc.requestRender(r));
+    pending[0].resolve();
+    await flush();
+    expect(pending[2].args.pageIndex).toBe(reqs[2].pageIndex);
+    for (const p of pending.slice(1)) p.resolve();
+    await Promise.all(results);
+  });
+
+  it("drops page views that were aborted before starting", async () => {
+    const pending = manualBackend();
+    rc.requestRender(req({ priority: "view" }));
+    rc.requestRender(req({ priority: "view" }));
+    const ctrl = new AbortController();
+    const queued = rc.requestRender(req({ priority: "view" }), ctrl.signal);
+    ctrl.abort();
+    await expect(queued).rejects.toMatchObject({ name: "AbortError" });
+    pending[0].resolve();
+    await flush();
+    expect(pending).toHaveLength(2);
+  });
+
   it("drops queued thumbnails that were aborted before starting", async () => {
     const pending = manualBackend();
     for (let i = 0; i < 3; i++) rc.requestRender(req());

@@ -41,7 +41,7 @@ PDFium is pinned in `scripts/fetch-pdfium.mjs` to the build that the `pdfium_812
 
 There are three tiers. One executable is both the app and the worker: `main.rs` checks for `--pdf-worker` and branches into `worker::main()`.
 
-1. **React UI** (`src/`) has no file-system access. Tauri capabilities exclude fs and dialog open/save, and the CSP is strict. All backend calls go through `src/lib/api.ts` (`invoke`). Page images come back as bytes and are shown as `blob:` URLs, cached in `lib/renderCache.ts`.
+1. **React UI** (`src/`) has no file-system access. Tauri capabilities exclude fs and dialog open/save, and the CSP is strict. All backend calls go through `src/lib/api.ts` (`invoke`). Page images come back as bytes and are shown as `blob:` URLs, cached in `lib/renderCache.ts`. Page-view renders go through a ranked, cancelable lane there (2 in flight), so the page the reader lands on renders before its neighbours and pages scrolled past are dropped.
 2. **Rust host** (`src-tauri/src/`):
    - `commands.rs` holds the Tauri commands. Native open/save dialogs run here. Dropped files become one-time path grants before the UI hears about them.
    - `host.rs` runs the worker pool and keeps document bytes in RAM. It also handles per-request timeouts (render 30 s, extract 30 s, save 300 s), restarts crashed workers, recycles thumbnail workers after `RECYCLE_AFTER_RENDERS`, and stops idle workers that hold documents (`trim_idle`, driven by a timer in `lib.rs`). Any worker can be killed at any time, so workers must hold no state that can't be rebuilt from the host's bytes.
@@ -60,7 +60,7 @@ There are three tiers. One executable is both the app and the worker: `main.rs` 
 Key invariants:
 
 - **Edits are data.** Per-page edits are `{ removedObjects, removedAnnots, blocks }` (see `protocol.rs` and `src/lib/types.ts`). Source documents are never mutated. Render copies the page into a scratch document and applies the edits. Save builds a fresh document page by page, so unchanged pages are copied untouched, and doc-level JS, OpenAction, embedded files and XFA are never carried over.
-- **Undo/redo is pure UI state.** The workspace (page list, rotation, edits, watermark, paragraph links) lives in the `src/state/workspace.ts` reducer, which keeps past/present/future history. `App.tsx` wires commands, shortcuts and drop events onto it.
+- **Undo/redo is pure UI state.** The workspace (page list, rotation, edits, watermark, paragraph links) lives in the `src/state/workspace.ts` reducer, which keeps past/present/future history. Each document tab holds its own history (`src/state/tabs.ts`). Open and drop add tabs; only *Merge* appends pages to the current tab (with no tab open, it combines the picked files into one new tab, marked `merged` so reopening one of those files still gets its own tab). The `docs` map in `App.tsx` is shared across tabs, and closing a tab frees only documents that no remaining tab references, including through undo. The host de-duplicates by canonical path plus size and mtime (`OpenFiles` in `commands.rs`), so reopening an unchanged file returns the same `docId`. `App.tsx` wires commands, shortcuts and drop events onto it.
 - **Memory is a product requirement** (1000-page documents must stay light). The render cache in `src/lib/renderCache.ts` has separate budgets for thumbnails and page views. Thumbnails share one IntersectionObserver (`useVisible` in `PageGrid.tsx`). Keep off-screen `<img>` elements mounted: measured, unmounting them raised WebView memory, because Chromium already discards off-screen decoded bitmaps.
 - **Worker 0 is interactive** (view, extract, save). The other workers render thumbnails, so thumbnail floods never block editing. Workers load documents lazily from host-held bytes, so a replacement worker can pick up where a crashed one left off.
 - **Bounded inputs everywhere:** 512 MB file limit with a `%PDF-` header check, bounded IPC frames, render size caps, and validated geometry and text lengths. Worker output is checked (PNG/JPEG magic bytes, saves start with `%PDF-`). Keep new requests and responses within these limits.
@@ -71,8 +71,9 @@ Debug-only hooks, compiled out of release builds:
 - `NOVAPDF_DEV_OPEN="a.pdf;b.pdf"` pre-grants files.
 - The main window is created hidden and shown on page load, with a 3 s fallback (`lib.rs`), to avoid a white flash at startup.
 - `NOVAPDF_DEV_SAVE_TO` makes *Save as…* skip the native dialog (see `save_with_dialog` in `commands.rs`).
+- `NOVAPDF_DEV_PICK=list.txt` makes *Open*/*Merge* return the paths in that file instead of showing the native dialog (see `open_with_dialog`).
 
-E2E tests depend on both.
+E2E tests depend on these.
 
 ## Testing conventions
 

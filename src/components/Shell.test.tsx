@@ -82,9 +82,11 @@ describe("Library", () => {
     expect(screen.getByRole("button", { name: /Watermark/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Remove watermarks/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Compress/ })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
     await userEvent.click(screen.getByRole("button", { name: /Open a PDF to start/ }));
-    expect(h.onOpen).toHaveBeenCalledTimes(2);
+    expect(h.onOpen).toHaveBeenCalledTimes(1);
+    // Merging needs nothing open: the picked files become one new document.
+    await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
+    expect(h.onAdd).toHaveBeenCalledTimes(1);
   });
 
   it("with documents: lists them and wires the actions", async () => {

@@ -109,12 +109,15 @@ Requirements:
 3. For each test, launches `src-tauri/target/debug/novapdf.exe` with a fresh WebView2
    profile and connects Playwright to it over the DevTools protocol.
 
-**Debug-build hooks** (both are compiled out of release builds):
+**Debug-build hooks** (all compiled out of release builds):
 - `NOVAPDF_DEV_OPEN`: paths pre-granted as if they had been dropped on the window. Tests
   then emit the same `files-dropped` event the native drop handler emits, so files open
   through the real path.
 - `NOVAPDF_DEV_SAVE_TO`: *Save as…* writes to this path instead of showing the native
   dialog. This lives in `save_with_dialog` in `commands.rs`.
+- `NOVAPDF_DEV_PICK`: a text file of paths, one per line, that *Open* and *Merge* return
+  instead of showing the native dialog. It is read on every call, so `app.pick([...])`
+  sets the files for the next pick. This lives in `open_with_dialog` in `commands.rs`.
 
 **Writing a test:** use the `app` fixture from `e2e/app.ts`.
 - Grant files with `test.use({ appOptions: { grants: [...], saveTo } })`.

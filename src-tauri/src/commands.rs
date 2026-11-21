@@ -4,9 +4,10 @@
 //! Paths come from native dialogs opened here, or from OS drag-and-drop events that
 //! Rust records as one-time grants before the UI hears about them.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
@@ -24,11 +25,51 @@ const MAX_FILE_BYTES: u64 = crate::protocol::MAX_DOC_BYTES;
 pub struct AppState {
     pub pool: Pool,
     grants: Mutex<HashSet<PathBuf>>,
+    open_files: Mutex<OpenFiles>,
+}
+
+/// Size and modification time: a file whose stamp changed is opened afresh.
+pub(crate) type FileStamp = (u64, Option<SystemTime>);
+
+struct OpenFile {
+    stamp: FileStamp,
+    doc_id: DocId,
+    pages: Vec<PageInfo>,
+}
+
+/// Files that are open right now, by canonical path. Opening one again hands back
+/// the same document (the UI switches to its tab) instead of a second copy in RAM.
+#[derive(Default)]
+pub(crate) struct OpenFiles(HashMap<PathBuf, OpenFile>);
+
+impl OpenFiles {
+    pub(crate) fn lookup(&self, path: &Path, stamp: FileStamp) -> Option<(DocId, Vec<PageInfo>)> {
+        self.0
+            .get(path)
+            .filter(|f| f.stamp == stamp)
+            .map(|f| (f.doc_id, f.pages.clone()))
+    }
+
+    pub(crate) fn remember(&mut self, path: PathBuf, stamp: FileStamp, doc_id: DocId, pages: Vec<PageInfo>) {
+        self.0.insert(path, OpenFile { stamp, doc_id, pages });
+    }
+
+    pub(crate) fn forget(&mut self, doc_id: DocId) {
+        self.0.retain(|_, f| f.doc_id != doc_id);
+    }
+}
+
+/// The key and stamp a path is remembered by. `None` when it cannot be read, in
+/// which case it is simply opened (and reports its own error).
+fn identify(path: &Path) -> Option<(PathBuf, FileStamp)> {
+    let key = std::fs::canonicalize(path).ok()?;
+    let meta = std::fs::metadata(&key).ok()?;
+    Some((key, (meta.len(), meta.modified().ok())))
 }
 
 impl AppState {
     pub fn new(pool: Pool) -> Self {
-        Self { pool, grants: Mutex::new(HashSet::new()) }
+        Self { pool, grants: Mutex::new(HashSet::new()), open_files: Mutex::new(OpenFiles::default()) }
     }
 
     /// Called from the native drag-and-drop handler.
@@ -84,6 +125,17 @@ fn read_pdf(path: &Path) -> Result<Vec<u8>, String> {
 
 async fn open_path(state: &AppState, path: PathBuf) -> OpenOutcome {
     let file_name = file_name_of(&path);
+    let id_path = path.clone();
+    let identity = tokio::task::spawn_blocking(move || identify(&id_path)).await.ok().flatten();
+    if let Some((key, stamp)) = &identity {
+        if let Some((doc_id, pages)) = state.open_files.lock().unwrap().lookup(key, *stamp) {
+            return OpenOutcome {
+                document: Some(OpenedDocument { doc_id, file_name: file_name.clone(), pages }),
+                file_name,
+                error: None,
+            };
+        }
+    }
     let read = tokio::task::spawn_blocking(move || read_pdf(&path))
         .await
         .map_err(|e| e.to_string())
@@ -92,6 +144,9 @@ async fn open_path(state: &AppState, path: PathBuf) -> OpenOutcome {
         Ok(bytes) => state.pool.open(bytes).await,
         Err(e) => Err(e),
     };
+    if let (Ok((doc_id, pages)), Some((key, stamp))) = (&result, identity) {
+        state.open_files.lock().unwrap().remember(key, stamp, *doc_id, pages.clone());
+    }
     match result {
         Ok((doc_id, pages)) => OpenOutcome {
             document: Some(OpenedDocument { doc_id, file_name: file_name.clone(), pages }),
@@ -107,6 +162,19 @@ pub async fn open_with_dialog(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<OpenOutcome>, String> {
+    // Debug builds only: NOVAPDF_DEV_PICK names a text file listing the paths to
+    // "pick" (one per line), read at each call, instead of showing the native
+    // dialog, for the scripted E2E tests (e2e/). Compiled out of release builds.
+    #[cfg(debug_assertions)]
+    if let Some(list) = std::env::var_os("NOVAPDF_DEV_PICK").filter(|v| !v.is_empty()) {
+        let text = std::fs::read_to_string(list).unwrap_or_default();
+        let mut out = Vec::new();
+        for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            out.push(open_path(&state, PathBuf::from(line)).await);
+        }
+        return Ok(out);
+    }
+
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
@@ -163,6 +231,7 @@ pub async fn open_dropped(
 
 #[tauri::command]
 pub async fn close_document(state: State<'_, AppState>, doc_id: DocId) -> Result<(), String> {
+    state.open_files.lock().unwrap().forget(doc_id);
     state.pool.close(doc_id).await;
     Ok(())
 }

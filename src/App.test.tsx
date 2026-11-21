@@ -23,6 +23,10 @@ const status = () => document.querySelector("footer.status")!;
 /** A key press as the browser delivers it: on the focused element, bubbling to window. */
 const press = (init: KeyboardEventInit) => fireEvent.keyDown(document.activeElement ?? document.body, init);
 const nav = (name: RegExp) => userEvent.click(screen.getByRole("button", { name }));
+const tabList = () => screen.queryByRole("tablist", { name: "Open documents" });
+const docTab = (name: RegExp) => within(tabList()!).getByRole("tab", { name });
+const tabNames = () => (tabList() ? within(tabList()!).queryAllByRole("tab") : []).map((t) => t.querySelector(".name")!.textContent);
+const activeTabName = () => within(tabList()!).getByRole("tab", { selected: true }).querySelector(".name")!.textContent;
 
 async function openDoc(pages = 3, name = "report.pdf") {
   const d = doc(nextDoc++, pages, name);
@@ -66,7 +70,10 @@ describe("App: start and open", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
     expect(await screen.findByText("bad.pdf: This file is not a PDF.")).toHaveClass("error");
     expect(screen.getByText("Opened 2 files (3 pages)")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("2 files");
+    // Each file gets its own tab; the last one is in front.
+    expect(tabNames()).toEqual(["good.pdf", "also.pdf"]);
+    expect(activeTabName()).toBe("also.pdf");
+    expect(status()).toHaveTextContent("Page 1 of 2");
   });
 
   it("an empty pick or a failing dialog changes nothing", async () => {
@@ -81,7 +88,7 @@ describe("App: start and open", () => {
     expect(await screen.findByText("Dialog failed")).toBeInTheDocument();
   });
 
-  it("files dropped on an empty window replace, and on an open one append", async () => {
+  it("dropped files open in new tabs", async () => {
     render(<App />);
     tauriMock.handle("open_dropped", (a) =>
       (a.paths as string[]).map((p, i) => opened(doc(100 + i + nextDoc++, 2, p))),
@@ -90,8 +97,8 @@ describe("App: start and open", () => {
     expect(await screen.findByText("Opened first.pdf (2 pages)")).toBeInTheDocument();
     await act(async () => tauriMock.emit("files-dropped", ["second.pdf"]));
     expect(await screen.findByText("Opened second.pdf (2 pages)")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("of 4");
-    expect(status()).toHaveTextContent("2 files");
+    expect(tabNames()).toEqual(["first.pdf", "second.pdf"]);
+    expect(status()).toHaveTextContent("Page 1 of 2");
   });
 
   it("overlapping drops keep both files, even when the second opens first", async () => {
@@ -108,8 +115,7 @@ describe("App: start and open", () => {
     expect(screen.queryByText(/Opened small\.pdf/)).not.toBeInTheDocument(); // waits for big.pdf
     await act(async () => pending.get("big.pdf")!());
     expect(await screen.findByText("Opened small.pdf (2 pages)")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("of 5");
-    expect(status()).toHaveTextContent("2 files");
+    expect(tabNames()).toEqual(["big.pdf", "small.pdf"]); // drop order, not finish order
     expect(tauriMock.calls("close_document")).toEqual([]);
   });
 
@@ -125,7 +131,7 @@ describe("App: start and open", () => {
     });
     expect(await screen.findByText("bad.pdf: This file is not a PDF.")).toBeInTheDocument();
     expect(await screen.findByText("Opened good.pdf (2 pages)")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("of 2");
+    expect(tabNames()).toEqual(["good.pdf"]);
   });
 
   it("a failed drop shows an error", async () => {
@@ -137,11 +143,158 @@ describe("App: start and open", () => {
     expect(await screen.findByText("This file was not dropped onto the window.")).toBeInTheDocument();
   });
 
-  it("re-opening closes the previous documents in the backend", async () => {
+  it("opening another file keeps the first one open in its tab", async () => {
     render(<App />);
-    const first = await openDoc(1, "a.pdf");
+    await openDoc(1, "a.pdf");
+    await openDoc(3, "b.pdf");
+    expect(tabNames()).toEqual(["a.pdf", "b.pdf"]);
+    expect(tauriMock.calls("close_document")).toEqual([]);
+    expect(status()).toHaveTextContent("Page 1 of 3");
+    await userEvent.click(docTab(/a\.pdf/));
+    expect(activeTabName()).toBe("a.pdf");
+    expect(status()).toHaveTextContent("Page 1 of 1");
+  });
+});
+
+describe("App: tabs", () => {
+  it("opening a file that is already open switches to its tab", async () => {
+    render(<App />);
+    const a = await openDoc(2, "a.pdf");
     await openDoc(1, "b.pdf");
-    expect(tauriMock.calls("close_document")).toEqual([{ docId: first.docId }]);
+    openReturns(a); // the backend hands back the same document for the same file
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    expect(await screen.findByText("a.pdf is already open")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["a.pdf", "b.pdf"]);
+    expect(activeTabName()).toBe("a.pdf");
+  });
+
+  it("each tab keeps its own pages and undo history", async () => {
+    render(<App />);
+    await openDoc(3, "a.pdf");
+    await nav(/Page Organizer/);
+    press({ key: "Delete" }); // the organizer selects the current page: page 1
+    expect(status()).toHaveTextContent("2 pages");
+    await openDoc(4, "b.pdf");
+    expect(status()).toHaveTextContent("4 pages");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    press({ key: "Tab", ctrlKey: true }); // wraps to a.pdf
+    expect(activeTabName()).toBe("a.pdf");
+    expect(status()).toHaveTextContent("2 pages");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    press({ key: "Tab", ctrlKey: true, shiftKey: true });
+    expect(activeTabName()).toBe("b.pdf");
+  });
+
+  it("merge appends files to the current tab only", async () => {
+    render(<App />);
+    await openDoc(2, "a.pdf");
+    openReturns(doc(700, 3, "extra.pdf"));
+    press({ key: "O", ctrlKey: true, shiftKey: true });
+    expect(await screen.findByText("Merged extra.pdf (3 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["a.pdf"]);
+    expect(docTab(/a\.pdf/)).toHaveTextContent("+1");
+    expect(status()).toHaveTextContent("of 5");
+    expect(status()).toHaveTextContent("2 files");
+  });
+
+  it("Merge PDFs with nothing open combines the files into one tab in the document view", async () => {
+    render(<App />);
+    openReturns(doc(701, 1, "one.pdf"), doc(702, 2, "two.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
+    expect(await screen.findByText("Merged 2 files (3 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["one.pdf"]);
+    expect(docTab(/one\.pdf/)).toHaveTextContent("+1");
+    expect(screen.getByRole("navigation", { name: "Reader tools" })).toBeInTheDocument();
+    expect(status()).toHaveTextContent("Page 1 of 3");
+    expect(status()).toHaveTextContent("2 files");
+    // Opening one of the merged files on its own gives it its own tab.
+    openReturns(doc(702, 2, "two.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    expect(await screen.findByText("Opened two.pdf (2 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["one.pdf", "two.pdf"]);
+  });
+
+  it("Ctrl+Shift+O with nothing open merges into a new tab", async () => {
+    render(<App />);
+    openReturns(doc(703, 1, "solo.pdf"));
+    press({ key: "O", ctrlKey: true, shiftKey: true });
+    expect(await screen.findByText("Merged solo.pdf (1 page)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["solo.pdf"]);
+    expect(docTab(/solo\.pdf/)).not.toHaveTextContent("+");
+  });
+
+  it("Merge PDFs from the library appends to the current tab and shows the merged pages", async () => {
+    render(<App />);
+    await openDoc(2, "a.pdf");
+    await nav(/Library/);
+    openReturns(doc(704, 3, "extra.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
+    expect(await screen.findByText("Merged extra.pdf (3 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["a.pdf"]);
+    expect(screen.getByRole("navigation", { name: "Reader tools" })).toBeInTheDocument();
+    await waitFor(() => expect(status()).toHaveTextContent("Page 3 of 5"));
+  });
+
+  it("clicking a tab from the library opens its document", async () => {
+    render(<App />);
+    await openDoc(1, "a.pdf");
+    await openDoc(2, "b.pdf");
+    await nav(/Library/);
+    expect(screen.queryByRole("navigation", { name: "Reader tools" })).not.toBeInTheDocument();
+    await userEvent.click(docTab(/a\.pdf/));
+    expect(activeTabName()).toBe("a.pdf");
+    expect(screen.getByRole("navigation", { name: "Reader tools" })).toBeInTheDocument();
+    expect(status()).toHaveTextContent("Page 1 of 1");
+    // The Page Organizer stays where it is.
+    await nav(/Page Organizer/);
+    await userEvent.click(docTab(/b\.pdf/));
+    expect(activeTabName()).toBe("b.pdf");
+    expect(screen.getByRole("navigation", { name: "Selection tools" })).toBeInTheDocument();
+  });
+
+  it("closing a tab frees documents no other tab uses", async () => {
+    render(<App />);
+    const a = await openDoc(2, "a.pdf");
+    const b = await openDoc(1, "b.pdf");
+    // Merge a.pdf's document into b.pdf's tab as well.
+    openReturns(a);
+    press({ key: "O", ctrlKey: true, shiftKey: true });
+    await screen.findByText("Merged a.pdf (2 pages)");
+    await userEvent.click(screen.getByRole("button", { name: "Close a.pdf" }));
+    await waitFor(() => expect(tabNames()).toEqual(["b.pdf"]));
+    expect(tauriMock.calls("close_document")).toEqual([]); // b.pdf's tab still uses it
+    tauriMock.ask.mockResolvedValue(true); // the merge left b.pdf unsaved
+    press({ key: "w", ctrlKey: true });
+    await waitFor(() => expect(tabNames()).toEqual([]));
+    expect(tauriMock.calls("close_document")).toEqual(
+      expect.arrayContaining([{ docId: a.docId }, { docId: b.docId }]),
+    );
+    expect(screen.getByText("No document open")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Document Library/ })).toBeInTheDocument();
+  });
+
+  it("middle-click closes a tab; other buttons do not", async () => {
+    render(<App />);
+    await openDoc(1, "a.pdf");
+    await openDoc(1, "b.pdf");
+    fireEvent(docTab(/a\.pdf/), new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    await waitFor(() => expect(tabNames()).toEqual(["b.pdf"]));
+    fireEvent(docTab(/b\.pdf/), new MouseEvent("auxclick", { bubbles: true, button: 2 }));
+    expect(tabNames()).toEqual(["b.pdf"]);
+  });
+
+  it("tabs can be switched from the keyboard and the palette", async () => {
+    render(<App />);
+    await openDoc(1, "a.pdf");
+    await openDoc(1, "b.pdf");
+    fireEvent.keyDown(docTab(/a\.pdf/), { key: "Enter" });
+    expect(activeTabName()).toBe("a.pdf");
+    await userEvent.click(screen.getByRole("button", { name: /Search tools/ }));
+    await userEvent.click(screen.getByText("Next tab"));
+    expect(activeTabName()).toBe("b.pdf");
+    await userEvent.click(screen.getByRole("button", { name: /Search tools/ }));
+    await userEvent.click(screen.getByText("Close tab"));
+    await waitFor(() => expect(tabNames()).toEqual(["a.pdf"]));
   });
 });
 
@@ -297,14 +450,37 @@ describe("App: unsaved-changes guards", () => {
     press({ key: "Delete" });
   }
 
-  it("asks before discarding on open; No keeps the workspace", async () => {
+  it("opening another file never asks: the unsaved tab stays open", async () => {
     await dirtyApp();
-    tauriMock.ask.mockResolvedValue(false);
     openReturns(doc(900, 1, "other.pdf"));
     await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
-    await waitFor(() => expect(tauriMock.ask).toHaveBeenCalled());
-    expect(tauriMock.calls("open_with_dialog")).toHaveLength(1); // only the first open
-    expect(document.querySelector(".doc-tab .name")).toHaveTextContent("a.pdf");
+    await screen.findByText("Opened other.pdf (1 page)");
+    expect(tauriMock.ask).not.toHaveBeenCalled();
+    expect(tabNames()).toEqual(["a.pdf", "other.pdf"]);
+  });
+
+  it("asks before closing a tab with unsaved changes; No keeps it", async () => {
+    await dirtyApp();
+    tauriMock.ask.mockResolvedValue(false);
+    press({ key: "w", ctrlKey: true });
+    await waitFor(() =>
+      expect(tauriMock.ask).toHaveBeenCalledWith("a.pdf has unsaved changes. Close it anyway?", expect.anything()),
+    );
+    expect(tabNames()).toEqual(["a.pdf"]);
+    expect(tauriMock.calls("close_document")).toEqual([]);
+    tauriMock.ask.mockResolvedValue(true);
+    press({ key: "w", ctrlKey: true });
+    await waitFor(() => expect(tabNames()).toEqual([]));
+  });
+
+  it("counts every unsaved tab when quitting", async () => {
+    await dirtyApp();
+    await openDoc(2, "b.pdf"); // stays in the organizer; switching tabs clears the selection
+    fireEvent.click(screen.getByLabelText("Page 1"));
+    press({ key: "Delete" });
+    tauriMock.ask.mockResolvedValue(false);
+    expect(await tauriMock.requestClose()).toBe(true);
+    expect(tauriMock.ask).toHaveBeenCalledWith("2 documents have unsaved changes. Quit anyway?", expect.anything());
   });
 
   it("asks before quitting with unsaved changes", async () => {

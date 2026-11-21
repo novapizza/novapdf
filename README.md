@@ -30,7 +30,8 @@ Bump both together.
 
 | Area | What it does |
 |---|---|
-| Pages | Thumbnails, multi-select (Ctrl/Shift), drag to reorder, rotate (R / Shift+R), delete, merge more PDFs (button or drop files on the window), undo/redo |
+| Tabs | Each opened or dropped PDF gets its own tab with its own pages and undo history. Opening a file that is already open (and unchanged on disk) switches to its tab. Ctrl+Tab / Ctrl+Shift+Tab switch, Ctrl+W or middle-click closes |
+| Pages | Thumbnails, multi-select (Ctrl/Shift), drag to reorder, rotate (R / Shift+R), delete, merge more PDFs into the current tab, or with nothing open combine several into one new tab (*Merge PDFs*, Ctrl+Shift+O), undo/redo |
 | Edit text | Click a paragraph → edit inline. Lines are grouped into paragraphs (columns and tables are kept apart). The edited paragraph is re-typeset with wrapping and alignment |
 | Add text | Text boxes with font, size, colour, bold/italic, alignment, line height and wrap width. Drag to move |
 | Watermark | Text watermark on every page (font, size, colour, opacity, angle), written as a real PDF object tagged `/Artifact /Watermark` |
@@ -127,5 +128,7 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
 
 * `NOVAPDF_INSPECT=file.pdf cargo test --manifest-path src-tauri/Cargo.toml --test inspect -- --ignored --nocapture`
   prints the paragraphs PDFium sees and writes `target/inspect-N.png`.
-* Debug builds only: `NOVAPDF_DEV_OPEN="a.pdf;b.pdf"` pre-grants files as if dropped, for
-  scripted UI tests (drive the WebView via `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).
+* Debug builds only: `NOVAPDF_DEV_OPEN="a.pdf;b.pdf"` pre-grants files as if dropped, and
+  `NOVAPDF_DEV_PICK=list.txt` makes Open/Merge return the paths listed in that file instead
+  of showing the native dialog, for scripted UI tests (drive the WebView via
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).

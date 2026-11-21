@@ -1,11 +1,16 @@
-// Page image cache and request queue.
+// Page image cache and request queues.
 //
 // * Results are cached as object URLs keyed by everything that affects the pixels.
 // * Thumbnails and full-page views have separate budgets, so a few large page
 //   renders never push out the thumbnails of a long document (and vice versa).
 // * Thumbnail requests are queued newest-first with limited concurrency and are
 //   dropped if their thumbnail scrolls out of view before they start.
-// * Page-view requests skip the queue (the backend gives them their own worker).
+// * Page-view requests have their own lane (the backend gives them their own
+//   worker, which renders one page at a time). Only a couple are sent at once, so
+//   the lane can still reorder: the page with the lowest rank (the one the reader
+//   is looking at) goes first, and pages that left the view before starting are
+//   dropped. Jumping far into a document therefore never waits behind renders of
+//   pages it scrolled past.
 
 import { api, type RenderRequest } from "./api";
 
@@ -20,7 +25,9 @@ export const BUDGET: Record<Kind, { entries: number; bytes: number }> = {
   thumb: { entries: 3000, bytes: 96 * MB },
   view: { entries: 48, bytes: 128 * MB },
 };
-const THUMB_CONCURRENCY = 3;
+/** Requests sent to the backend at once, per kind. Two views keep the worker busy
+ *  (one rendering, one waiting in the pipe) while leaving the rest reorderable. */
+export const CONCURRENCY: Record<Kind, number> = { thumb: 3, view: 2 };
 
 interface Entry {
   url: string;
@@ -34,15 +41,19 @@ const used: Record<Kind, { entries: number; bytes: number }> = {
 };
 const inflight = new Map<string, Promise<string>>();
 
+/** Lower runs sooner. Read when the job is picked, so it can change while it waits. */
+export type Rank = () => number;
+
 interface Job {
   key: string;
   req: RenderRequest;
   resolve: (url: string) => void;
   reject: (e: unknown) => void;
   signal?: AbortSignal;
+  rank?: Rank;
 }
-const queue: Job[] = [];
-let active = 0;
+const queues: Record<Kind, Job[]> = { thumb: [], view: [] };
+const active: Record<Kind, number> = { thumb: 0, view: 0 };
 
 function hash(str: string): string {
   // cyrb53
@@ -99,23 +110,40 @@ export function cached(req: RenderRequest): string | undefined {
   return e?.url;
 }
 
-function run(job: Job) {
-  active += 1;
+function run(kind: Kind, job: Job) {
+  active[kind] += 1;
   const p = api
     .renderPage(job.req)
-    .then((blob) => store(job.key, blob, "thumb"))
+    .then((blob) => store(job.key, blob, kind))
     .finally(() => {
       inflight.delete(job.key);
-      active -= 1;
-      pump();
+      active[kind] -= 1;
+      pump(kind);
     });
   inflight.set(job.key, p);
   p.then(job.resolve, job.reject);
 }
 
-function pump() {
-  while (active < THUMB_CONCURRENCY && queue.length > 0) {
-    const job = queue.pop()!; // newest first: what the user is looking at now
+/** Index of the next job: thumbnails newest first (what the user is looking at now),
+ *  views by rank, oldest first among equals. */
+function next(kind: Kind, queue: Job[]): number {
+  if (kind === "thumb") return queue.length - 1;
+  let best = 0;
+  let bestRank = Infinity;
+  for (let i = 0; i < queue.length; i++) {
+    const r = queue[i].rank?.() ?? 0;
+    if (r < bestRank) {
+      best = i;
+      bestRank = r;
+    }
+  }
+  return best;
+}
+
+function pump(kind: Kind) {
+  const queue = queues[kind];
+  while (active[kind] < CONCURRENCY[kind] && queue.length > 0) {
+    const [job] = queue.splice(next(kind, queue), 1);
     if (job.signal?.aborted) {
       job.reject(new DOMException("Aborted", "AbortError"));
       continue;
@@ -125,36 +153,37 @@ function pump() {
       existing.then(job.resolve, job.reject);
       continue;
     }
-    run(job);
+    run(kind, job);
   }
 }
 
-export function requestRender(req: RenderRequest, signal?: AbortSignal): Promise<string> {
+/**
+ * Renders a page (or returns the cached image). `signal` drops the request if it is
+ * aborted before it starts; `rank` orders queued page views (lower first).
+ */
+export function requestRender(req: RenderRequest, signal?: AbortSignal, rank?: Rank): Promise<string> {
   const hit = cached(req);
   if (hit) return Promise.resolve(hit);
   const key = renderKey(req);
   const existing = inflight.get(key);
   if (existing) return existing;
 
-  if (req.priority === "view") {
-    const p = api
-      .renderPage(req)
-      .then((blob) => store(key, blob, "view"))
-      .finally(() => inflight.delete(key));
-    inflight.set(key, p);
-    return p;
-  }
-
-  return new Promise<string>((resolve, reject) => {
-    const job: Job = { key, req, resolve, reject, signal };
-    queue.push(job);
+  const kind = req.priority;
+  const queued = new Promise<string>((resolve, reject) => {
+    const job: Job = { key, req, resolve, reject, signal, rank };
+    queues[kind].push(job);
     signal?.addEventListener("abort", () => {
-      const i = queue.indexOf(job);
+      const i = queues[kind].indexOf(job);
       if (i >= 0) {
-        queue.splice(i, 1);
+        queues[kind].splice(i, 1);
         reject(new DOMException("Aborted", "AbortError"));
       }
     });
-    pump();
+    pump(kind);
   });
+  // Started right away: hand out the shared in-flight promise, like a duplicate would get.
+  const started = inflight.get(key);
+  if (!started) return queued;
+  queued.catch(() => {}); // its outcome is reported through `started`
+  return started;
 }

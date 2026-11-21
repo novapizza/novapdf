@@ -60,6 +60,8 @@ interface Opts {
   text?: PageText[];
   layoutLines?: (args: { text: string; hScale?: number }) => number;
   extract?: (args: Record<string, unknown>) => unknown;
+  /** A plain document of this many pages instead of the two-page default. */
+  pages?: number;
 }
 
 function setup(opts: Opts = {}) {
@@ -79,10 +81,15 @@ function setup(opts: Opts = {}) {
 
   function Harness() {
     const [h, dispatch] = useReducer(reducer, undefined, () =>
-      reducer(initialHistory, { type: "reset", pages: [page("A", docId, 0), page("B", docId, 1, { rotation: 90 })] }),
+      reducer(initialHistory, {
+        type: "reset",
+        pages: opts.pages
+          ? Array.from({ length: opts.pages }, (_, i) => page(i ? `P${i}` : "A", docId, i))
+          : [page("A", docId, 0), page("B", docId, 1, { rotation: 90 })],
+      }),
     );
     state.ws = h.present;
-    const docs = useMemo(() => new Map([[docId, doc(docId, 2)]]), []);
+    const docs = useMemo(() => new Map([[docId, doc(docId, opts.pages ?? 2)]]), []);
     return (
       <DocumentView
         pages={h.present.pages}
@@ -179,6 +186,40 @@ describe("DocumentView: reading", () => {
     await userEvent.click(within(strip).getByRole("tab", { name: /Pages/ }));
     await userEvent.click(screen.getByRole("button", { name: "Toggle page thumbnails" }));
     expect(screen.queryByRole("complementary", { name: "Pages" })).not.toBeInTheDocument();
+  });
+
+  it("jumping far renders the landing page first; pages seen before show at once", async () => {
+    setup({ mode: "read", pages: 30 });
+    const views = () =>
+      tauriMock
+        .calls("render_page")
+        .map((c) => c.args as { pageIndex: number; format: string })
+        .filter((a) => a.format === "png")
+        .map((a) => a.pageIndex);
+    expect(await screen.findByAltText("Page 1")).toBeInTheDocument();
+    // Page 1 went first, at once; the pages below it follow after a short delay.
+    expect(views()[0]).toBe(0);
+    await waitFor(() => expect(views()).toEqual([0, 1, 2, 3]));
+    const before = views().length;
+    const scroll = document.querySelector<HTMLElement>(".doc-scroll")!;
+    const strip = screen.getByRole("complementary", { name: "Pages" });
+    await userEvent.click(within(strip).getByRole("button", { name: "Go to page 20" }));
+    fireEvent.scroll(scroll);
+    await waitFor(() => expect(surface(20)).not.toBeNull());
+    // The landing page goes to the worker right away, ahead of its neighbours.
+    expect(views().slice(before)).toEqual([19]);
+    // Until its image arrives, the filmstrip thumbnail stands in.
+    expect(surface(20).querySelector("img.placeholder")).not.toBeNull();
+    expect(await screen.findByAltText("Page 20")).toBeInTheDocument();
+    await waitFor(() => expect(views().length).toBeGreaterThan(before + 1));
+
+    // Back to page 1: its image is cached, so it shows with no spinner and no render.
+    await userEvent.click(within(strip).getByRole("button", { name: "Go to page 1" }));
+    fireEvent.scroll(scroll);
+    await waitFor(() => expect(surface(1)).not.toBeNull());
+    expect(within(surface(1)).getByAltText("Page 1")).toBeInTheDocument();
+    expect(surface(1).querySelector(".page-spinner")).toBeNull();
+    expect(views().filter((i) => i === 0)).toHaveLength(1);
   });
 
   it("reports render failures", async () => {

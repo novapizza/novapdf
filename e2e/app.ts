@@ -5,9 +5,12 @@
 //                        Tests then emit the same "files-dropped" event the native
 //                        drop handler emits, so opening goes through the real path.
 //   NOVAPDF_DEV_SAVE_TO  "Save as…" writes here instead of showing the native dialog.
+//   NOVAPDF_DEV_PICK     A text file of paths (one per line) that Open and Merge
+//                        "pick" instead of showing the native dialog. `app.pick()`
+//                        writes it before each pick.
 import { test as base, chromium, expect, type Browser, type Page } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { APP_EXE, WORK_DIR } from "./paths";
 
@@ -22,6 +25,8 @@ export interface App {
   page: Page;
   /** Opens files through the drop path. Each path must be in `grants`. */
   drop(paths: string[]): Promise<void>;
+  /** Sets the files the next Open or Merge dialog returns. */
+  pick(paths: string[]): void;
   close(): Promise<void>;
 }
 
@@ -46,10 +51,13 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
   const port = nextPort++;
   mkdirSync(WORK_DIR, { recursive: true });
   const profile = mkdtempSync(join(WORK_DIR, "profile-"));
+  const pickFile = join(profile, "pick.txt");
+  writeFileSync(pickFile, "");
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     NOVAPDF_DEV_OPEN: (opts.grants ?? []).join(";"),
     NOVAPDF_DEV_SAVE_TO: opts.saveTo ?? "",
+    NOVAPDF_DEV_PICK: pickFile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     // A fresh profile per launch: no theme or storage carried between tests.
     WEBVIEW2_USER_DATA_FOLDER: profile,
@@ -91,6 +99,9 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
             .__TAURI_INTERNALS__;
           await internals.invoke("plugin:event|emit", { event: "files-dropped", payload });
         }, paths);
+      },
+      pick(paths) {
+        writeFileSync(pickFile, paths.join("\n"));
       },
     };
   } catch (e) {
