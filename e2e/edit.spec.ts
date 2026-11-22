@@ -110,8 +110,9 @@ test.describe("text boxes", () => {
 
     await page.keyboard.press("t");
     const box = (await surface(page, 1).boundingBox())!;
-    // Lower part of page 1 is empty in the fixture.
-    await page.mouse.click(box.x + box.width * 0.15, box.y + box.height * 0.85);
+    // Page 1 is empty below its text. Click halfway down: in a maximized window the
+    // page is fitted to width, so its lower part is below the fold.
+    await page.mouse.click(box.x + box.width * 0.15, box.y + box.height * 0.5);
     await inlineEditor(page).fill("Added note");
     await inlineEditor(page).press("Control+Enter");
     await expect(page.getByRole("heading", { name: "Text box" })).toBeVisible();

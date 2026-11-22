@@ -72,6 +72,7 @@ Debug-only hooks, compiled out of release builds:
 - The main window is created hidden and shown on page load, with a 3 s fallback (`lib.rs`), to avoid a white flash at startup.
 - `NOVAPDF_DEV_SAVE_TO` makes *Save as…* skip the native dialog (see `save_with_dialog` in `commands.rs`).
 - `NOVAPDF_DEV_PICK=list.txt` makes *Open*/*Merge* return the paths in that file instead of showing the native dialog (see `open_with_dialog`).
+- `NOVAPDF_DEV_MULTI_INSTANCE=1` turns off the single-instance lock (`single_instance` in `lib.rs`), so a test can open a second app to check a save. `launchApp` sets it unless `singleInstance: true`.
 
 E2E tests depend on these.
 

@@ -8,6 +8,8 @@
 //   NOVAPDF_DEV_PICK     A text file of paths (one per line) that Open and Merge
 //                        "pick" instead of showing the native dialog. `app.pick()`
 //                        writes it before each pick.
+//   NOVAPDF_DEV_MULTI_INSTANCE  Turns off the one-app-at-a-time lock, so a test can
+//                        open a second app to check a save. Set unless `singleInstance`.
 import { test as base, chromium, expect, type Browser, type Page } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -19,6 +21,8 @@ export interface AppOptions {
   grants?: string[];
   /** Where Save as… writes. */
   saveTo?: string;
+  /** Keep the release behaviour: a second launch focuses this app and exits. */
+  singleInstance?: boolean;
 }
 
 export interface App {
@@ -58,6 +62,7 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
     NOVAPDF_DEV_OPEN: (opts.grants ?? []).join(";"),
     NOVAPDF_DEV_SAVE_TO: opts.saveTo ?? "",
     NOVAPDF_DEV_PICK: pickFile,
+    NOVAPDF_DEV_MULTI_INSTANCE: opts.singleInstance ? "" : "1",
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     // A fresh profile per launch: no theme or storage carried between tests.
     WEBVIEW2_USER_DATA_FOLDER: profile,

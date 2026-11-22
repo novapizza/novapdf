@@ -118,6 +118,9 @@ Requirements:
 - `NOVAPDF_DEV_PICK`: a text file of paths, one per line, that *Open* and *Merge* return
   instead of showing the native dialog. It is read on every call, so `app.pick([...])`
   sets the files for the next pick. This lives in `open_with_dialog` in `commands.rs`.
+- `NOVAPDF_DEV_MULTI_INSTANCE`: turns off the one-app-at-a-time lock, so a test can open
+  a second app to check a save. `launchApp` sets it unless the test passes
+  `singleInstance: true` (see `e2e/window.spec.ts`). This lives in `single_instance` in `lib.rs`.
 
 **Writing a test:** use the `app` fixture from `e2e/app.ts`.
 - Grant files with `test.use({ appOptions: { grants: [...], saveTo } })`.
