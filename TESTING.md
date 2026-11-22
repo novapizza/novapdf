@@ -67,7 +67,13 @@ inside a well-tested file. A new file with no tests at all fails the gate.
 The Rust gate excludes these files:
 - `main.rs`, `host.rs` and `sandbox.rs`: they need the running app, so the E2E suite covers them.
 - `worker/mod.rs`: `tests/worker_process.rs` runs it end to end, but the sandboxed worker
-  drops to Low integrity and can't write coverage data.
+  drops to Low integrity (macOS: Seatbelt) and can't write coverage data.
+
+On macOS, `tests/worker_process.rs` also checks the worker sandbox: a probe re-runs the
+test binary sandboxed and confirms writes, file reads, network and exec are blocked, and a
+save must embed an installed TrueType font (so the font folders are still readable).
+`host/tests.rs` checks that the memory watchdog kills a worker over the cap and that the
+pool replaces it.
 - `tests.rs` files.
 
 ## Test helpers

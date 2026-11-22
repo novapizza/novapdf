@@ -40,3 +40,6 @@ strip = true
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Threading", "Win32_System_SystemServices", "Win32_System_Diagnostics_Debug"] }
+
+[target."cfg(target_os = \"macos\")".dependencies]
+libc = "0.2"

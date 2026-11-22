@@ -52,6 +52,17 @@ struct Proc {
     child: Child,
     #[cfg(windows)]
     _job: crate::sandbox::Job,
+    /// Registered with the pool's memory watchdog for as long as this worker lives.
+    #[cfg(target_os = "macos")]
+    _watch: Arc<Watched>,
+}
+
+/// A worker the macOS memory watchdog checks: its pid, and its start time so a
+/// reused pid is never mistaken for it.
+#[cfg(target_os = "macos")]
+struct Watched {
+    pid: u32,
+    started: u64,
 }
 
 #[derive(Default)]
@@ -80,6 +91,8 @@ pub struct Pool {
     docs: RwLock<HashMap<DocId, Arc<DocBytes>>>,
     next_doc: AtomicU32,
     next_bg: AtomicUsize,
+    #[cfg(target_os = "macos")]
+    watched: std::sync::Mutex<Vec<std::sync::Weak<Watched>>>,
 }
 
 impl Pool {
@@ -94,6 +107,8 @@ impl Pool {
             docs: RwLock::new(HashMap::new()),
             next_doc: AtomicU32::new(1),
             next_bg: AtomicUsize::new(0),
+            #[cfg(target_os = "macos")]
+            watched: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -126,6 +141,15 @@ impl Pool {
                 .map_err(|e| format!("Could not sandbox the PDF engine: {e}"))?
         };
 
+        #[cfg(target_os = "macos")]
+        let watch = {
+            let pid = child.id().ok_or("PDF engine exited immediately")?;
+            let usage = crate::sandbox::usage(pid).ok_or("PDF engine exited immediately")?;
+            let watch = Arc::new(Watched { pid, started: usage.started });
+            self.watched.lock().unwrap().push(Arc::downgrade(&watch));
+            watch
+        };
+
         let stdin = child.stdin.take().ok_or("No stdin for PDF engine")?;
         let stdout = child.stdout.take().ok_or("No stdout for PDF engine")?;
         Ok(Proc {
@@ -134,6 +158,8 @@ impl Pool {
             child,
             #[cfg(windows)]
             _job: job,
+            #[cfg(target_os = "macos")]
+            _watch: watch,
         })
     }
 
@@ -312,6 +338,34 @@ impl Pool {
         }
     }
 
+    /// macOS: kills any worker whose memory is over `WORKER_MEMORY_LIMIT`, as the Job
+    /// Object does on Windows. Runs every `MEMORY_POLL` without taking slot locks, so
+    /// it reaches the worker that is busy (and growing). The request in flight then
+    /// fails like a crash, and the next request starts a fresh worker.
+    #[cfg(target_os = "macos")]
+    pub fn enforce_memory_limit(&self) {
+        self.enforce_memory_cap(crate::sandbox::WORKER_MEMORY_LIMIT as u64);
+    }
+
+    /// Kills workers over `cap` bytes; returns how many.
+    #[cfg(target_os = "macos")]
+    fn enforce_memory_cap(&self, cap: u64) -> usize {
+        let mut watched = self.watched.lock().unwrap();
+        watched.retain(|w| w.strong_count() > 0);
+        let mut killed = 0;
+        for w in watched.iter().filter_map(std::sync::Weak::upgrade) {
+            if let Some(u) = crate::sandbox::usage(w.pid)
+                && u.started == w.started
+                && u.footprint > cap
+            {
+                eprintln!("[host] PDF engine {} used {} MB; stopping it", w.pid, u.footprint >> 20);
+                crate::sandbox::kill(w.pid);
+                killed += 1;
+            }
+        }
+        killed
+    }
+
     /// Registers a document's bytes and parses it in the interactive worker.
     pub async fn open(&self, bytes: Vec<u8>) -> Result<(DocId, Vec<PageInfo>), String> {
         let id = self.next_doc.fetch_add(1, Ordering::Relaxed);
@@ -353,3 +407,7 @@ impl Pool {
         }
     }
 }
+
+// The tests drive the macOS memory watchdog.
+#[cfg(all(test, target_os = "macos"))]
+mod tests;
