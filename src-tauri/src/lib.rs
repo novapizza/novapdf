@@ -26,9 +26,33 @@ fn is_app_url(url: &Url) -> bool {
     }
 }
 
+/// Only one NovaPDF may run at a time. Debug builds can opt out with
+/// NOVAPDF_DEV_MULTI_INSTANCE, because E2E tests open a second app to check saves.
+fn single_instance() -> bool {
+    !(cfg!(debug_assertions)
+        && std::env::var_os("NOVAPDF_DEV_MULTI_INSTANCE").is_some_and(|v| !v.is_empty()))
+}
+
+/// Brings the running app's window to the front when a second launch is refused.
+fn focus_main(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    if single_instance() {
+        // Registered first, so a second launch exits before it starts any workers.
+        // Its arguments are ignored: the app takes no file paths on the command line.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            focus_main(app);
+        }));
+    }
+    builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // The PDFium library is bundled as a resource under `pdfium/`.
@@ -54,6 +78,8 @@ pub fn run() {
                 .title("NovaPDF")
                 .inner_size(1280.0, 840.0)
                 .min_inner_size(720.0, 480.0)
+                // Opens maximized; the size above is what "Restore down" returns to.
+                .maximized(true)
                 .visible(false)
                 .on_navigation(is_app_url)
                 .on_page_load(|w, payload| {

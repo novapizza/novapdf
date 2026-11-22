@@ -28,6 +28,7 @@ pdfium-render = { version = "0.9.5", default-features = false, features = ["pdfi
 fontdb = "0.24.0"
 ttf-parser = "0.25.1"
 lopdf = { version = "0.47.0", default-features = false }
+tauri-plugin-single-instance = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
