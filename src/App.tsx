@@ -21,6 +21,7 @@ import { CleanDialog, type ScanResult } from "./components/CleanDialog";
 import { Toasts, type Toast } from "./components/Toasts";
 import { Icon } from "./components/Icon";
 import { useTheme } from "./lib/theme";
+import { useSidebarCollapsed } from "./lib/sidebar";
 import { ComingSoon, Library, type Section, SECTION_INFO, Sidebar, paperName } from "./components/Shell";
 import { type Command, CommandPalette } from "./components/CommandPalette";
 import "./App.css";
@@ -59,6 +60,7 @@ export default function App() {
   const [thumbWidth, setThumbWidth] = useState(170);
   const [sanitize, setSanitize] = useState(true);
   const [theme, setTheme] = useTheme();
+  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
   const [fonts, setFonts] = useState<string[]>(["Helvetica", "Times", "Courier"]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -330,8 +332,11 @@ export default function App() {
         e.preventDefault();
         const next = neighbourTab(tabState, e.shiftKey ? -1 : 1);
         if (next) tabsDispatch({ type: "activate", id: next });
-      } else if (typing) {
+      } else if (typing || target.isContentEditable) {
         return;
+      } else if (mod && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setSidebarCollapsed(!sidebarCollapsed);
       } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
@@ -395,6 +400,7 @@ export default function App() {
     { id: "undo", title: "Undo", description: "Step back one change", icon: "undo", tag: "Action", shortcut: "Ctrl Z", run: history.past.length ? () => dispatch({ type: "undo" }) : undefined },
     { id: "redo", title: "Redo", description: "Step forward one change", icon: "redo", tag: "Action", shortcut: "Ctrl Y", run: history.future.length ? () => dispatch({ type: "redo" }) : undefined },
     { id: "sanitize", title: sanitize ? "Turn off sanitize on save" : "Turn on sanitize on save", description: "Strip scripts, launch links, media and attachments when saving", icon: "shield", tag: "Action", run: () => setSanitize(!sanitize) },
+    { id: "sidebar", title: sidebarCollapsed ? "Expand menu" : "Collapse menu", description: sidebarCollapsed ? "Show the full left menu" : "Shrink the left menu to icons for more room", icon: "panelLeft", tag: "View", shortcut: "Ctrl B", run: () => setSidebarCollapsed(!sidebarCollapsed) },
     { id: "t-light", title: "Use light theme", description: theme === "light" ? "Current theme" : "Switch the interface to light", icon: "sun", tag: "View", run: theme === "light" ? undefined : () => setTheme("light") },
     { id: "t-dark", title: "Use dark theme", description: theme === "dark" ? "Current theme" : "Switch the interface to dark", icon: "moon", tag: "View", run: theme === "dark" ? undefined : () => setTheme("dark") },
     { id: "t-system", title: "Match system theme", description: theme === "system" ? "Current theme" : "Follow the Windows light/dark setting", icon: "monitor", tag: "View", run: theme === "system" ? undefined : () => setTheme("system") },
@@ -409,8 +415,17 @@ export default function App() {
   ];
 
   return (
-    <div className="app">
-      <Sidebar section={section} onNavigate={navigate} sanitize={sanitize} onSanitize={setSanitize} theme={theme} onTheme={setTheme} />
+    <div className={`app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+      <Sidebar
+        section={section}
+        onNavigate={navigate}
+        sanitize={sanitize}
+        onSanitize={setSanitize}
+        theme={theme}
+        onTheme={setTheme}
+        collapsed={sidebarCollapsed}
+        onCollapsed={setSidebarCollapsed}
+      />
 
       <div className="workspace">
         <header className="topbar">

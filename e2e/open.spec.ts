@@ -112,6 +112,27 @@ test("clicking a tab from the library opens its document", async ({ app }) => {
   await expect(page.getByAltText("Page 1")).toBeVisible();
 });
 
+test("collapsing the left menu gives the page more room", async ({ app }) => {
+  const { page } = app;
+  await app.drop([FIXTURES.sample]);
+  const img = page.getByAltText("Page 1");
+  await expect(img).toBeVisible();
+  const workspace = page.locator(".workspace");
+  const before = (await workspace.boundingBox())!.width;
+
+  await page.getByRole("button", { name: "Collapse menu" }).click();
+  await expect(page.getByRole("button", { name: "Expand menu" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Workspaces" }).getByText("Page Organizer")).toBeHidden();
+  await expect.poll(async () => (await workspace.boundingBox())!.width).toBeGreaterThan(before + 150);
+  // Icons still navigate.
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: /Page Organizer/ }).click();
+  await expect(page.getByRole("navigation", { name: "Selection tools" })).toBeVisible();
+
+  await page.keyboard.press("Control+B");
+  await expect(page.getByRole("button", { name: "Collapse menu" })).toBeVisible();
+  await expect.poll(async () => (await workspace.boundingBox())!.width).toBeLessThan(before + 1);
+});
+
 test("rejects a file that is not a PDF", async ({ app }) => {
   const { page } = app;
   await app.drop([FIXTURES.notPdf]);
