@@ -82,9 +82,13 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
 * **Windows sandbox.** Each worker runs in its own Job Object: 3 GB memory cap, no child
   processes, UI restrictions, and it is killed with the app. It drops to **Low integrity**
   (no writes to user files or the registry) and enables mitigations: no dynamic code, no
-  extension-point DLLs, no remote or low-label image loads, strict handle checks. The
-  environment is cleared, and the worker never touches the file system for documents (bytes
-  in, bytes out over pipes).
+  extension-point DLLs, no remote or low-label image loads, strict handle checks.
+* **macOS sandbox.** Once PDFium is loaded, each worker enters a Seatbelt sandbox that denies
+  everything except reading the installed font folders: no file writes, no other file
+  reads, no network, no starting programs. The host checks each worker's memory every
+  0.5 s and kills one that goes over 3 GB; the app restarts it.
+* On every platform the worker's environment is cleared, and it never touches the file
+  system for documents (bytes in, bytes out over pipes).
 * **No PDF JavaScript.** The bundled PDFium build has no V8/XFA, and no form-fill environment
   is created.
 * **Output.** Saving builds a new document page by page, so document-level JavaScript,
@@ -110,8 +114,11 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
 * Page-level `/AA` actions cannot be removed through PDFium's API. Copied form widgets keep
   their appearance but lose the AcroForm dictionary.
 * Password-protected PDFs are rejected.
-* The OS sandbox is Windows-only so far. On macOS and Linux the worker is still isolated
-  with timeouts and restart; add the App Sandbox or seccomp/landlock before shipping there.
+* The OS sandbox covers Windows and macOS. On Linux the worker is still isolated with
+  timeouts and restart, but has no sandbox or memory cap; add seccomp/landlock before
+  shipping there.
+* The macOS memory cap is polled, so a worker can overshoot 3 GB by whatever it allocates
+  in half a second before it is stopped.
 * The page editor shows pages in their original orientation; the app-level rotation is
   applied on save and in thumbnails.
 

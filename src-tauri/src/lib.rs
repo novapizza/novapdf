@@ -2,7 +2,7 @@ mod commands;
 pub mod geometry;
 mod host;
 pub mod protocol;
-mod sandbox;
+pub mod sandbox;
 pub mod shared;
 pub mod worker;
 
@@ -104,6 +104,19 @@ pub fn run() {
                     handle.state::<AppState>().pool.trim_idle();
                 }
             });
+
+            // macOS has no Job Object: the host enforces the worker memory cap itself.
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut tick = tokio::time::interval(crate::sandbox::MEMORY_POLL);
+                    loop {
+                        tick.tick().await;
+                        handle.state::<AppState>().pool.enforce_memory_limit();
+                    }
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

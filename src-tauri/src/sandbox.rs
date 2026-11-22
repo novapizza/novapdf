@@ -8,11 +8,26 @@
 //! policies: no dynamic code, no extension-point DLLs, no remote or low-label image
 //! loads, strict handle checks.
 //!
-//! Other platforms: the worker is still a separate process with timeouts and restart;
-//! add seccomp/landlock (Linux) or the App Sandbox (macOS) before shipping there.
+//! macOS, worker side: after PDFium is loaded the worker enters a Seatbelt sandbox
+//! (`sandbox_init`) that denies everything except reading the installed font folders.
+//! No file writes, no other file reads, no network, no starting programs.
+//!
+//! macOS, host side: there is no Job Object equivalent, so the host polls each
+//! worker's physical footprint (`MEMORY_POLL`) and kills one that goes over the cap.
+//! The pool then restarts it like any crashed worker.
+//!
+//! Linux: the worker is still a separate process with timeouts and restart; add
+//! seccomp/landlock and a memory cap before shipping there.
 
-/// Memory cap for one worker process.
+/// Memory cap for one worker process: enforced by the Job Object on Windows and by
+/// the host's watchdog on macOS.
+#[cfg(any(windows, target_os = "macos"))]
 pub const WORKER_MEMORY_LIMIT: usize = 3 * 1024 * 1024 * 1024;
+
+/// How often the macOS host checks worker memory. A worker can overshoot the cap by
+/// whatever it allocates in this time before it is killed.
+#[cfg(target_os = "macos")]
+pub const MEMORY_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
 #[cfg(windows)]
 mod imp {
@@ -169,5 +184,10 @@ pub fn harden_worker() {
     imp::harden_worker();
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+mod mac;
+#[cfg(target_os = "macos")]
+pub use mac::{Usage, harden_worker, kill, profile, usage};
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn harden_worker() {}
