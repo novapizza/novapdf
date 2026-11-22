@@ -7,6 +7,8 @@ import { tauriMock } from "./tauri";
 afterEach(() => {
   cleanup();
   tauriMock.reset();
+  // Persisted UI preferences (theme, sidebar) must not leak between tests.
+  localStorage.clear();
 });
 
 // theme.ts reads matchMedia at import time.

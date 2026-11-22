@@ -442,6 +442,41 @@ describe("App: save", () => {
   });
 });
 
+describe("App: sidebar", () => {
+  const app = () => document.querySelector(".app")!;
+
+  it("collapses and expands from the button, Ctrl+B and the palette, and remembers it", async () => {
+    const { unmount } = render(<App />);
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
+    expect(app()).toHaveClass("sidebar-collapsed");
+    expect(screen.getByRole("button", { name: "Expand menu" })).toHaveAttribute("aria-expanded", "false");
+
+    press({ key: "b", ctrlKey: true });
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+
+    press({ key: "k", ctrlKey: true });
+    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "collapse menu");
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Search commands" }), { key: "Enter" });
+    expect(app()).toHaveClass("sidebar-collapsed");
+
+    // Persisted across launches.
+    unmount();
+    render(<App />);
+    expect(app()).toHaveClass("sidebar-collapsed");
+    await userEvent.click(screen.getByRole("button", { name: "Expand menu" }));
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+  });
+
+  it("Ctrl+B while typing in a field does not toggle the menu", async () => {
+    render(<App />);
+    press({ key: "k", ctrlKey: true });
+    const box = await screen.findByRole("textbox", { name: "Search commands" });
+    fireEvent.keyDown(box, { key: "b", ctrlKey: true });
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+  });
+});
+
 describe("App: unsaved-changes guards", () => {
   async function dirtyApp() {
     render(<App />);

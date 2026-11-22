@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ComingSoon, EmptyNote, Library, SECTION_INFO, Sidebar, paperName } from "./Shell";
+import { ComingSoon, EmptyNote, Library, SECTION_INFO, Sidebar, TIP_DELAY_MS, paperName } from "./Shell";
 import { Toasts } from "./Toasts";
 import { Icon } from "./Icon";
 import { doc } from "../test/fixtures";
@@ -30,6 +30,8 @@ describe("Sidebar", () => {
     onSanitize: vi.fn(),
     theme: "system" as const,
     onTheme: vi.fn(),
+    collapsed: false,
+    onCollapsed: vi.fn(),
   });
 
   it("marks the current section and navigates", async () => {
@@ -48,6 +50,75 @@ describe("Sidebar", () => {
     expect(screen.getByRole("radio", { name: "Match system" })).toHaveAttribute("aria-checked", "true");
     await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
     expect(p.onTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("collapses and expands", async () => {
+    const p = props();
+    const { rerender } = render(<Sidebar {...p} />);
+    expect(screen.getByRole("complementary")).not.toHaveClass("collapsed");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
+    expect(p.onCollapsed).toHaveBeenCalledWith(true);
+
+    rerender(<Sidebar {...p} collapsed />);
+    expect(screen.getByRole("complementary")).toHaveClass("collapsed");
+    // Labels are hidden by CSS when collapsed; the buttons keep their names.
+    expect(screen.getByRole("button", { name: "Page Organizer" })).not.toHaveAttribute("title");
+    await userEvent.click(screen.getByRole("button", { name: "Expand menu" }));
+    expect(p.onCollapsed).toHaveBeenCalledWith(false);
+  });
+
+  describe("tooltips", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+    const tip = () => screen.queryByRole("tooltip");
+
+    it("show a label after hovering for a second when collapsed", () => {
+      render(<Sidebar {...props()} collapsed />);
+      const btn = screen.getByRole("button", { name: "Page Organizer" });
+      fireEvent.mouseOver(btn);
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS - 1));
+      expect(tip()).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(tip()).toHaveTextContent("Page Organizer");
+
+      // Moving within the same button keeps it; moving to another restarts the delay.
+      fireEvent.mouseOver(btn.querySelector("svg")!);
+      expect(tip()).toHaveTextContent("Page Organizer");
+      fireEvent.mouseOver(screen.getByRole("button", { name: "Sign & Protect" }));
+      expect(tip()).toBeNull();
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
+      expect(tip()).toHaveTextContent("Sign & Protect · Coming soon");
+
+      fireEvent.mouseLeave(screen.getByRole("complementary"));
+      expect(tip()).toBeNull();
+    });
+
+    it("hide on click, and never show for things without a label", () => {
+      render(<Sidebar {...props()} collapsed />);
+      fireEvent.mouseOver(screen.getByRole("button", { name: "Expand menu" }));
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
+      expect(tip()).toHaveTextContent("Expand menu (Ctrl+B)");
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Expand menu" }));
+      expect(tip()).toBeNull();
+
+      fireEvent.mouseOver(screen.getByText("On this device"));
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
+      expect(tip()).toBeNull();
+    });
+
+    it("do not show when the sidebar is expanded, except in a narrow window", () => {
+      const { unmount } = render(<Sidebar {...props()} />);
+      fireEvent.mouseOver(screen.getByRole("button", { name: "Page Organizer" }));
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
+      expect(tip()).toBeNull();
+      unmount();
+
+      vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+      render(<Sidebar {...props()} />);
+      fireEvent.mouseOver(screen.getByRole("button", { name: "Page Organizer" }));
+      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
+      expect(tip()).toHaveTextContent("Page Organizer");
+    });
   });
 });
 
