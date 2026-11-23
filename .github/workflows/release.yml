@@ -115,13 +115,33 @@ jobs:
 
       - name: Write Tauri Windows signing config
         run: |
-          # Build the sign command string first so ConvertTo-Json handles all escaping.
-          $signCmd = "signtool.exe sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib `"$env:AZURE_DLIB_PATH`" /dmdf `"$env:AZURE_METADATA_PATH`" %1"
+          # signtool is not on PATH on hosted runners, and Tauri spawns the command
+          # without a shell. Use the newest x64 signtool from the Windows SDK: the
+          # Azure dlib needs a recent one.
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $signtool) {
+            Write-Error "signtool.exe not found in the Windows SDK."
+            exit 1
+          }
+          # The {cmd, args} form keeps paths with spaces intact; the string form
+          # is split on whitespace. Tauri replaces %1 with the file to sign.
           @{
             bundle = @{
-              windows = @{ signCommand = $signCmd }
+              windows = @{
+                signCommand = @{
+                  cmd  = $signtool.FullName
+                  args = @(
+                    'sign', '/v', '/fd', 'SHA256',
+                    '/tr', 'http://timestamp.acs.microsoft.com', '/td', 'SHA256',
+                    '/dlib', $env:AZURE_DLIB_PATH,
+                    '/dmdf', $env:AZURE_METADATA_PATH,
+                    '%1'
+                  )
+                }
+              }
             }
-          } | ConvertTo-Json -Depth 5 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
+          } | ConvertTo-Json -Depth 6 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
           "TAURI_SIGN_CONFIG=$env:RUNNER_TEMP\tauri-sign.json" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build and publish Windows
