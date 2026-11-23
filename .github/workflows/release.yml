@@ -41,14 +41,46 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # The app is universal, so PDFium must be too; postinstall fetched only arm64.
+      - name: Fetch universal PDFium
+        run: node scripts/fetch-pdfium.mjs --universal --force
+
+      # The cert goes into one keychain used for both the PDFium signature and
+      # Tauri's. APPLE_CERTIFICATE is deliberately not passed to tauri-action,
+      # which would import it into a second keychain.
+      - name: Import Apple signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          rm "$RUNNER_TEMP/cert.p12"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # Tauri signs the app bundle but not files under Contents/Resources, and
+      # notarization rejects an unsigned or untimestamped dylib there.
+      - name: Sign PDFium
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --timestamp --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" src-tauri/pdfium/libpdfium.dylib
+          codesign --verify --strict --verbose=2 src-tauri/pdfium/libpdfium.dylib
+          lipo -archs src-tauri/pdfium/libpdfium.dylib
+
       - name: Build and publish macOS (universal binary)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Apple signing — tauri-action imports the cert into its own keychain;
-          # do not also import manually or the two keychains will conflict.
-          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Signs with the identity from the keychain imported above.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           # Apple notarization
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -115,13 +147,33 @@ jobs:
 
       - name: Write Tauri Windows signing config
         run: |
-          # Build the sign command string first so ConvertTo-Json handles all escaping.
-          $signCmd = "signtool.exe sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib `"$env:AZURE_DLIB_PATH`" /dmdf `"$env:AZURE_METADATA_PATH`" %1"
+          # signtool is not on PATH on hosted runners, and Tauri spawns the command
+          # without a shell. Use the newest x64 signtool from the Windows SDK: the
+          # Azure dlib needs a recent one.
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $signtool) {
+            Write-Error "signtool.exe not found in the Windows SDK."
+            exit 1
+          }
+          # The {cmd, args} form keeps paths with spaces intact; the string form
+          # is split on whitespace. Tauri replaces %1 with the file to sign.
           @{
             bundle = @{
-              windows = @{ signCommand = $signCmd }
+              windows = @{
+                signCommand = @{
+                  cmd  = $signtool.FullName
+                  args = @(
+                    'sign', '/v', '/fd', 'SHA256',
+                    '/tr', 'http://timestamp.acs.microsoft.com', '/td', 'SHA256',
+                    '/dlib', $env:AZURE_DLIB_PATH,
+                    '/dmdf', $env:AZURE_METADATA_PATH,
+                    '%1'
+                  )
+                }
+              }
             }
-          } | ConvertTo-Json -Depth 5 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
+          } | ConvertTo-Json -Depth 6 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
           "TAURI_SIGN_CONFIG=$env:RUNNER_TEMP\tauri-sign.json" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build and publish Windows
