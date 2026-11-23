@@ -6,6 +6,12 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Re-uploads an existing GitHub release to R2 without rebuilding.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to upload to R2, e.g. v0.1.0
+        required: true
 
 permissions:
   contents: write
@@ -17,6 +23,7 @@ concurrency:
 jobs:
   build-macos:
     name: Build and Publish macOS
+    if: github.event_name == 'push'
     runs-on: macos-latest
     environment: Production
     steps:
@@ -95,6 +102,7 @@ jobs:
 
   build-windows:
     name: Build and Publish Windows
+    if: github.event_name == 'push'
     runs-on: windows-latest
     environment: Production
     steps:
@@ -191,3 +199,37 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --config ${{ env.TAURI_SIGN_CONFIG }}
+
+  publish-r2:
+    name: Upload release to R2
+    needs: [build-macos, build-windows]
+    # On a tag push, only after both builds published; on manual dispatch the
+    # builds are skipped and the existing release is uploaded.
+    if: >-
+      always() && (github.event_name == 'workflow_dispatch' ||
+      (needs.build-macos.result == 'success' && needs.build-windows.result == 'success'))
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          ls -l assets
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 rejects the default CRC checksums newer AWS CLI versions send.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_RELEASES_ACCOUNT_ID: ${{ secrets.R2_RELEASES_ACCOUNT_ID }}
+          R2_RELEASES_BUCKET: ${{ secrets.R2_RELEASES_BUCKET }}
+        run: |
+          aws s3 cp assets/ "s3://$R2_RELEASES_BUCKET/" --recursive \
+            --endpoint-url "https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com"
