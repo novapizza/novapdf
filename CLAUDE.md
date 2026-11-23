@@ -35,7 +35,7 @@ Always run E2E through `npm run test:e2e`, never `npx playwright test`. The wrap
 
 Debugging text extraction: `NOVAPDF_INSPECT=file.pdf cargo test --manifest-path src-tauri/Cargo.toml --test inspect -- --ignored --nocapture`
 
-PDFium is pinned in `scripts/fetch-pdfium.mjs` to the build that the `pdfium_8125` feature of `pdfium-render` targets. Bump both together. To re-download: `npm run setup:pdfium -- --force`.
+PDFium is pinned in `scripts/fetch-pdfium.mjs` to the build that the `pdfium_8125` feature of `pdfium-render` targets. Bump both together, and update the pinned SHA-256 of each archive in the same script (downloads that do not match fail). To re-download: `npm run setup:pdfium -- --force`.
 
 ## Architecture
 

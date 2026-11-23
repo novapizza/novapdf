@@ -1,0 +1,12 @@
+# Keeps the release workflow's actions current. They are pinned to commit SHAs
+# (see .github/workflows/release.yml); Dependabot bumps the SHA and its version
+# comment together, in a PR that CI and a reviewer see before it lands.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
