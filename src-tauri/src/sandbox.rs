@@ -170,11 +170,20 @@ mod imp {
         set_policy(ProcessExtensionPointDisablePolicy, 0b1, "extension-point");
         set_policy(ProcessImageLoadPolicy, 0b111, "image-load");
         set_policy(ProcessStrictHandleCheckPolicy, 0b11, "strict-handle");
+        // The mitigations above are defence in depth and stay best-effort. Low
+        // integrity is what keeps the worker from writing the user's files, so it
+        // fails closed: exit before reading any document.
         if let Err(e) = lower_integrity() {
             eprintln!("[pdf-worker] could not lower integrity level: {e}");
+            std::process::exit(super::EXIT_NO_SANDBOX);
         }
     }
 }
+
+/// The worker's exit code when it cannot enter its sandbox. It exits rather than
+/// parse documents unsandboxed (2 means PDFium failed to load).
+#[cfg(any(windows, target_os = "macos"))]
+pub const EXIT_NO_SANDBOX: i32 = 3;
 
 #[cfg(windows)]
 pub use imp::Job;

@@ -57,10 +57,13 @@ fn enter(profile: &str) -> Result<(), String> {
     Err(message)
 }
 
+/// Fails closed: a worker that cannot enter the sandbox exits before it reads any
+/// document, so the host reports an engine error instead of parsing unsandboxed.
 pub fn harden_worker() {
     let home = std::env::var("HOME").ok();
     if let Err(e) = enter(&profile(home.as_deref())) {
         eprintln!("[pdf-worker] could not enter the sandbox: {e}");
+        std::process::exit(super::EXIT_NO_SANDBOX);
     }
 }
 
