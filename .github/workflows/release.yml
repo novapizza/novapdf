@@ -83,6 +83,14 @@ jobs:
           codesign --verify --strict --verbose=2 src-tauri/pdfium/libpdfium.dylib
           lipo -archs src-tauri/pdfium/libpdfium.dylib
 
+      - name: Prepare updater config
+        id: updater
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: node scripts/updater-config.mjs src-tauri/tauri.updater.conf.json >> "$GITHUB_OUTPUT"
+
       - name: Build and publish macOS (universal binary)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -93,12 +101,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Signs the updater bundle (.sig files) that latest.json is built from.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: NovaPDF ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          args: --target universal-apple-darwin
+          # publish-r2 writes latest.json with R2 URLs instead.
+          includeUpdaterJson: false
+          args: --target universal-apple-darwin ${{ steps.updater.outputs.config }}
 
   build-windows:
     name: Build and Publish Windows
@@ -184,6 +197,14 @@ jobs:
           } | ConvertTo-Json -Depth 6 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
           "TAURI_SIGN_CONFIG=$env:RUNNER_TEMP\tauri-sign.json" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Prepare updater config
+        id: updater
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: node scripts/updater-config.mjs src-tauri/tauri.updater.conf.json >> "$GITHUB_OUTPUT"
+
       - name: Build and publish Windows
         uses: tauri-apps/tauri-action@v0
         env:
@@ -193,12 +214,17 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          # Signs the updater bundle (.sig files) that latest.json is built from.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: NovaPDF ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          args: --config ${{ env.TAURI_SIGN_CONFIG }}
+          # publish-r2 writes latest.json with R2 URLs instead.
+          includeUpdaterJson: false
+          args: --config ${{ env.TAURI_SIGN_CONFIG }} ${{ steps.updater.outputs.config }}
 
   publish-r2:
     name: Upload release to R2
@@ -212,24 +238,63 @@ jobs:
     environment: Production
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 rejects the default CRC checksums newer AWS CLI versions send.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_RELEASES_ACCOUNT_ID: ${{ secrets.R2_RELEASES_ACCOUNT_ID }}
+      R2_RELEASES_BUCKET: ${{ secrets.R2_RELEASES_BUCKET }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          # Manifests attached by an earlier run are regenerated below.
+          rm -f assets/latest.yml assets/latest.json
+          # The bundler names the macOS updater bundle after the product only, so
+          # every release would overwrite one key in the flat bucket while an
+          # older latest.json still points at it. Version it like the .dmg.
+          VERSION="${TAG#v}"
+          for f in assets/NovaPDF_universal.app.tar.gz assets/NovaPDF_universal.app.tar.gz.sig; do
+            [ -e "$f" ] || continue
+            mv -v "$f" "assets/NovaPDF_${VERSION}_universal.${f#assets/NovaPDF_universal.}"
+          done
           ls -l assets
 
-      - name: Upload to R2
+      - name: Write release manifests
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          # R2 rejects the default CRC checksums newer AWS CLI versions send.
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          R2_RELEASES_ACCOUNT_ID: ${{ secrets.R2_RELEASES_ACCOUNT_ID }}
-          R2_RELEASES_BUCKET: ${{ secrets.R2_RELEASES_BUCKET }}
+          RELEASE_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          mkdir -p manifest
+          node scripts/write-release-manifest.mjs assets manifest/latest.yml
+
+      - name: Upload installers to R2
         run: |
           aws s3 cp assets/ "s3://$R2_RELEASES_BUCKET/" --recursive \
-            --endpoint-url "https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com"
+            --endpoint-url "https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com" \
+            --cache-control "public, max-age=31536000, immutable" --no-progress
+
+      # After the installers: a manifest must never name a file that is not up
+      # yet. Uncached, because these are the only keys whose content changes.
+      - name: Publish manifests to R2
+        run: |
+          ENDPOINT="https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com"
+          aws s3 cp manifest/latest.yml "s3://$R2_RELEASES_BUCKET/latest.yml" \
+            --endpoint-url "$ENDPOINT" --content-type "text/yaml; charset=utf-8" \
+            --cache-control "no-cache, must-revalidate" --no-progress
+          # Absent for an unsigned build; the previous latest.json then stays, so
+          # installed apps keep pointing at an update they can verify.
+          if [ -f manifest/latest.json ]; then
+            aws s3 cp manifest/latest.json "s3://$R2_RELEASES_BUCKET/latest.json" \
+              --endpoint-url "$ENDPOINT" --content-type "application/json; charset=utf-8" \
+              --cache-control "no-cache, must-revalidate" --no-progress
+          else
+            echo "::warning::no latest.json, this release is not an update source"
+          fi
+
+      - name: Attach manifests to the GitHub release
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" manifest/latest.* --clobber
