@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 import { api, errorMessage } from "./lib/api";
-import type { OpenOutcome, PageEdits, Watermark } from "./lib/types";
+import type { OpenOutcome, PageEdits, UpdateStatus, Watermark } from "./lib/types";
 import { editsAreEmpty } from "./lib/types";
 import {
   type Action,
@@ -21,6 +21,7 @@ import { CleanDialog, type ScanResult } from "./components/CleanDialog";
 import { Toasts, type Toast } from "./components/Toasts";
 import { Icon } from "./components/Icon";
 import { useTheme } from "./lib/theme";
+import { useSidebarCollapsed } from "./lib/sidebar";
 import { ComingSoon, Library, type Section, SECTION_INFO, Sidebar, paperName } from "./components/Shell";
 import { type Command, CommandPalette } from "./components/CommandPalette";
 import "./App.css";
@@ -59,6 +60,7 @@ export default function App() {
   const [thumbWidth, setThumbWidth] = useState(170);
   const [sanitize, setSanitize] = useState(true);
   const [theme, setTheme] = useTheme();
+  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
   const [fonts, setFonts] = useState<string[]>(["Helvetica", "Times", "Courier"]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   /** A file drag is over the window: show the drop overlay. */
@@ -75,6 +77,20 @@ export default function App() {
   useEffect(() => {
     api.listFonts().then(setFonts).catch(() => {});
   }, []);
+
+  // Released builds look for a newer version once at launch. Only a found update
+  // is reported; a failed or unconfigured check stays quiet.
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  useEffect(() => {
+    api
+      .checkUpdate()
+      .then((s) => {
+        if (!s.available) return;
+        setUpdate(s);
+        notify(`NovaPDF ${s.version} is available. Install it from the command palette.`);
+      })
+      .catch(() => {});
+  }, [notify]);
 
   // Keep refs for event handlers registered once.
   const stateRef = useRef({ ws, tabs: tabState.tabs, tabId, section });
@@ -215,6 +231,40 @@ export default function App() {
     if (!docMode && section !== "grid") setSection("read");
   };
 
+  // ---------- updates ----------
+
+  const checkForUpdates = async () => {
+    try {
+      const s = await api.checkUpdate();
+      setUpdate(s.available ? s : null);
+      if (!s.configured) notify("This build can't update itself. Download new versions from the NovaPDF website.");
+      else if (s.available) notify(`NovaPDF ${s.version} is available.`);
+      else notify(`NovaPDF is up to date (version ${s.currentVersion}).`);
+    } catch (err) {
+      notify(`Couldn't check for updates: ${errorMessage(err)}`, "error");
+    }
+  };
+
+  /** Installing restarts the app, so unsaved work is confirmed first, as on quit. */
+  const installUpdate = async () => {
+    if (busy) return;
+    const unsaved = stateRef.current.tabs.filter(isDirty).length;
+    if (unsaved) {
+      const what = unsaved === 1 ? "You have unsaved changes" : `${unsaved} documents have unsaved changes`;
+      if (!(await ask(`${what}. NovaPDF restarts to install the update. Continue?`, { title: "NovaPDF", kind: "warning" })))
+        return;
+    }
+    try {
+      setBusy("Installing update…");
+      await api.installUpdate();
+    } catch (err) {
+      setUpdate(null);
+      notify(`Couldn't install the update: ${errorMessage(err)}`, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // ---------- saving ----------
 
   const save = async () => {
@@ -344,8 +394,11 @@ export default function App() {
         e.preventDefault();
         const next = neighbourTab(tabState, e.shiftKey ? -1 : 1);
         if (next) tabsDispatch({ type: "activate", id: next });
-      } else if (typing) {
+      } else if (typing || target.isContentEditable) {
         return;
+      } else if (mod && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setSidebarCollapsed(!sidebarCollapsed);
       } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
@@ -409,9 +462,12 @@ export default function App() {
     { id: "undo", title: "Undo", description: "Step back one change", icon: "undo", tag: "Action", shortcut: "Ctrl Z", run: history.past.length ? () => dispatch({ type: "undo" }) : undefined },
     { id: "redo", title: "Redo", description: "Step forward one change", icon: "redo", tag: "Action", shortcut: "Ctrl Y", run: history.future.length ? () => dispatch({ type: "redo" }) : undefined },
     { id: "sanitize", title: sanitize ? "Turn off sanitize on save" : "Turn on sanitize on save", description: "Strip scripts, launch links, media and attachments when saving", icon: "shield", tag: "Action", run: () => setSanitize(!sanitize) },
+    { id: "sidebar", title: sidebarCollapsed ? "Expand menu" : "Collapse menu", description: sidebarCollapsed ? "Show the full left menu" : "Shrink the left menu to icons for more room", icon: "panelLeft", tag: "View", shortcut: "Ctrl B", run: () => setSidebarCollapsed(!sidebarCollapsed) },
     { id: "t-light", title: "Use light theme", description: theme === "light" ? "Current theme" : "Switch the interface to light", icon: "sun", tag: "View", run: theme === "light" ? undefined : () => setTheme("light") },
     { id: "t-dark", title: "Use dark theme", description: theme === "dark" ? "Current theme" : "Switch the interface to dark", icon: "moon", tag: "View", run: theme === "dark" ? undefined : () => setTheme("dark") },
     { id: "t-system", title: "Match system theme", description: theme === "system" ? "Current theme" : "Follow the Windows light/dark setting", icon: "monitor", tag: "View", run: theme === "system" ? undefined : () => setTheme("system") },
+    { id: "update-check", title: "Check for updates", description: "Look for a newer version of NovaPDF", icon: "download", tag: "Action", run: checkForUpdates },
+    { id: "update-install", title: `Install NovaPDF ${update?.version ?? "update"}`, description: "Download the update and restart NovaPDF", icon: "download", tag: "Action", run: update ? installUpdate : undefined },
     { id: "s-hl", title: "Highlight text", description: "Not available yet", icon: "highlighter", tag: "Soon" },
     { id: "s-note", title: "Sticky note", description: "Not available yet", icon: "note", tag: "Soon" },
     { id: "s-ink", title: "Freehand ink", description: "Not available yet", icon: "ink", tag: "Soon" },
@@ -423,8 +479,17 @@ export default function App() {
   ];
 
   return (
-    <div className="app">
-      <Sidebar section={section} onNavigate={navigate} sanitize={sanitize} onSanitize={setSanitize} theme={theme} onTheme={setTheme} />
+    <div className={`app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+      <Sidebar
+        section={section}
+        onNavigate={navigate}
+        sanitize={sanitize}
+        onSanitize={setSanitize}
+        theme={theme}
+        onTheme={setTheme}
+        collapsed={sidebarCollapsed}
+        onCollapsed={setSidebarCollapsed}
+      />
 
       <div className="workspace">
         <header className="topbar">

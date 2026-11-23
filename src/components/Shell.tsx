@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DocInfo } from "../state/workspace";
 import type { ThemePref } from "../lib/theme";
 import { Icon, type IconName } from "./Icon";
@@ -37,6 +38,11 @@ const THEMES: { key: ThemePref; label: string; icon: IconName }[] = [
   { key: "dark", label: "Dark", icon: "moon" },
 ];
 
+/** Hover time before a compact-sidebar tooltip appears. */
+export const TIP_DELAY_MS = 1000;
+/** Matches the narrow-window rule in App.css, where the sidebar is icons-only too. */
+const NARROW_WINDOW = "(max-width: 1100px)";
+
 export function Sidebar(props: {
   section: Section;
   onNavigate: (s: Section) => void;
@@ -44,12 +50,40 @@ export function Sidebar(props: {
   onSanitize: (v: boolean) => void;
   theme: ThemePref;
   onTheme: (t: ThemePref) => void;
+  collapsed: boolean;
+  onCollapsed: (v: boolean) => void;
 }) {
+  // Icons-only sidebar: labels show as a tooltip after hovering for TIP_DELAY_MS.
+  // Native `title` tooltips cannot be delayed, so this is drawn by hand, in a portal
+  // because the sidebar clips its contents.
+  const [tip, setTip] = useState<{ label: string; x: number; y: number } | null>(null);
+  const hovered = useRef<HTMLElement | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const hideTip = () => {
+    window.clearTimeout(timer.current);
+    hovered.current = null;
+    setTip(null);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const onOver = (e: MouseEvent) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-tip]");
+    if (el === hovered.current) return;
+    hideTip();
+    if (!el || !(props.collapsed || window.matchMedia(NARROW_WINDOW).matches)) return;
+    hovered.current = el;
+    timer.current = window.setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      setTip({ label: el.dataset.tip!, x: r.right + 10, y: r.top + r.height / 2 });
+    }, TIP_DELAY_MS);
+  };
+
   const item = (n: NavItem) => (
     <button
       key={n.key}
       className={`nav-item${props.section === n.key ? " current" : ""}`}
       aria-current={props.section === n.key ? "page" : undefined}
+      aria-label={n.label}
+      data-tip={n.soon ? `${n.label} · Coming soon` : n.label}
       onClick={() => props.onNavigate(n.key)}
     >
       <Icon name={n.icon} size={18} />
@@ -58,15 +92,31 @@ export function Sidebar(props: {
     </button>
   );
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${props.collapsed ? " collapsed" : ""}`} onMouseOver={onOver} onMouseLeave={hideTip} onMouseDown={hideTip}>
+      {tip &&
+        createPortal(
+          <div className="side-tip" role="tooltip" style={{ left: tip.x, top: tip.y }}>
+            {tip.label}
+          </div>,
+          document.body,
+        )}
       <div className="brand">
         <span className="brand-mark">
           <Icon name="book" size={18} />
         </span>
-        <span>
+        <span className="brand-text">
           <span className="brand-name">NovaPDF</span>
-          <span className="brand-sub">Editorial Workstation</span>
         </span>
+        <button
+          className="ghost icon-btn sidebar-toggle"
+          aria-expanded={!props.collapsed}
+          aria-label={props.collapsed ? "Expand menu" : "Collapse menu"}
+          title={props.collapsed ? undefined : "Collapse menu (Ctrl+B)"}
+          data-tip={props.collapsed ? "Expand menu (Ctrl+B)" : undefined}
+          onClick={() => props.onCollapsed(!props.collapsed)}
+        >
+          <Icon name="panelLeft" size={16} />
+        </button>
       </div>
       <nav className="nav" aria-label="Workspaces">
         <div className="nav-heading">Workspaces</div>

@@ -154,6 +154,32 @@ fn worker_speaks_the_frame_protocol() {
     assert!(status.success(), "worker exit status {status:?}");
 }
 
+/// The worker reads installed fonts after it has sandboxed itself: text outside
+/// WinAnsi needs a TrueType font from the system, embedded in the saved file. If the
+/// sandbox blocked the font folders, the worker would fall back to a standard font
+/// and there would be no embedded font program.
+#[test]
+fn sandboxed_worker_embeds_an_installed_font() {
+    let mut w = Worker::start();
+    w.ok(json!({"op": "open", "docId": 1}), &sample_pdf());
+    let block = json!({
+        "id": "b1", "x": 72, "baseline": 600, "width": null, "text": "Ωμέγα αβγ",
+        "font": {"family": "Arial", "bold": false, "italic": false},
+        "size": 14, "color": [0, 0, 0], "lineHeight": 1.2,
+    });
+    let (_, saved) = w.ok(
+        json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0,
+               "edits": {"blocks": [block]}}], "watermark": null, "sanitize": false}),
+        &[],
+    );
+    assert!(saved.starts_with(b"%PDF-"));
+    assert!(
+        saved.windows(b"/FontFile2".len()).any(|win| win == b"/FontFile2"),
+        "no embedded TrueType font: system fonts were not readable"
+    );
+    let _ = w.child.kill();
+}
+
 /// Windows: the host shares document bytes through a read-only section instead of
 /// sending them, so the worker (already at Low integrity) maps them itself.
 #[cfg(windows)]
@@ -195,4 +221,46 @@ fn worker_opens_documents_from_shared_memory() {
     );
 
     let _ = w.child.kill();
+}
+
+/// macOS: what the worker's sandbox blocks. The checks must run inside a sandboxed
+/// process, and entering the sandbox cannot be undone, so this test re-runs itself as
+/// a child (`PROBE`) that enters it and reports back through its exit status.
+#[cfg(target_os = "macos")]
+#[test]
+fn sandbox_blocks_writes_reads_network_and_programs() {
+    const PROBE: &str = "NOVAPDF_SANDBOX_PROBE";
+    if let Ok(dir) = std::env::var(PROBE) {
+        let port: u16 = std::env::var("NOVAPDF_SANDBOX_PORT").unwrap().parse().unwrap();
+        let home = std::env::var("HOME").unwrap();
+        novapdf_lib::sandbox::harden_worker();
+        let checks = [
+            ("write a file", std::fs::write(PathBuf::from(&dir).join("escaped.txt"), b"x").is_err()),
+            ("read a system file", std::fs::read("/etc/hosts").is_err()),
+            ("list the home folder", std::fs::read_dir(&home).is_err()),
+            ("connect to the network", std::net::TcpStream::connect(("127.0.0.1", port)).is_err()),
+            ("start a program", Command::new("/bin/echo").stdout(Stdio::null()).status().is_err()),
+            ("list the font folder", std::fs::read_dir("/System/Library/Fonts").is_ok_and(|mut d| d.next().is_some())),
+        ];
+        let failed: Vec<&str> = checks.iter().filter(|(_, ok)| !ok).map(|(name, _)| *name).collect();
+        if !failed.is_empty() {
+            eprintln!("sandbox check failed: {failed:?}");
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
+
+    let dir = std::env::temp_dir().join(format!("novapdf-sandbox-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let status = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "sandbox_blocks_writes_reads_network_and_programs", "--nocapture", "--test-threads=1"])
+        .env(PROBE, &dir)
+        .env("NOVAPDF_SANDBOX_PORT", listener.local_addr().unwrap().port().to_string())
+        .status()
+        .unwrap();
+    let escaped = dir.join("escaped.txt").exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(status.success(), "sandboxed probe reported a failure: {status:?}");
+    assert!(!escaped);
 }

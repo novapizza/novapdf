@@ -7,6 +7,7 @@ import type {
   PageEdits,
   PageText,
   Rotation,
+  UpdateStatus,
   Watermark,
   WatermarkScan,
 } from "./types";
@@ -60,6 +61,10 @@ export const api = {
     invoke<LayoutResult>("layout_text", { args }),
 
   listFonts: () => invoke<string[]>("list_fonts"),
+
+  checkUpdate: () => invoke<UpdateStatus>("check_update"),
+  /** On success the app restarts, so this only settles if the install failed. */
+  installUpdate: () => invoke<void>("install_update"),
 };
 
 export function errorMessage(e: unknown): string {

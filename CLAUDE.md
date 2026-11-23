@@ -46,7 +46,7 @@ There are three tiers. One executable is both the app and the worker: `main.rs` 
    - `commands.rs` holds the Tauri commands. Native open/save dialogs run here. Dropped files become one-time path grants before the UI hears about them.
    - `host.rs` runs the worker pool and keeps document bytes in RAM. It also handles per-request timeouts (render 30 s, extract 30 s, save 300 s), restarts crashed workers, recycles thumbnail workers after `RECYCLE_AFTER_RENDERS`, and stops idle workers that hold documents (`trim_idle`, driven by a timer in `lib.rs`). Any worker can be killed at any time, so workers must hold no state that can't be rebuilt from the host's bytes.
    - `shared.rs`: on Windows the document bytes live once in an anonymous section. Each worker gets a map-read-only handle via `Request::OpenShared`, instead of the bytes going in an `Open` payload. Other platforms, or a failed section, fall back to `Open`.
-   - `sandbox.rs` is Windows-only: Job Object (3 GB memory cap, no child processes), Low integrity, and process mitigations.
+   - `sandbox.rs`: on Windows, Job Object (3 GB memory cap, no child processes), Low integrity, and process mitigations. On macOS (`sandbox/mac.rs`), a Seatbelt profile that only allows reading font folders, plus the host-side memory watchdog (`enforce_memory_limit`, polled from `lib.rs`). Anything new the worker reads after start-up must be allowed in that profile, or it fails silently on macOS.
    - `protocol.rs` defines the framed stdin/stdout IPC types and the edit model, and validates both.
 3. **PDF worker** (`src-tauri/src/worker/`) is the only place untrusted PDF bytes are parsed:
    - `pdf.rs` wraps PDFium

@@ -79,7 +79,11 @@ fn safe_file_name_limits_length_in_characters() {
 
 #[test]
 fn file_name_of_returns_last_component() {
+    // Backslash is a separator only on Windows; elsewhere it is part of a file name.
+    #[cfg(windows)]
     assert_eq!(file_name_of(Path::new("C:\\docs\\Report 2024.pdf")), "Report 2024.pdf");
+    #[cfg(not(windows))]
+    assert_eq!(file_name_of(Path::new("/docs/a\\b.pdf")), "a\\b.pdf");
     assert_eq!(file_name_of(Path::new("/tmp/a/b.PDF")), "b.PDF");
     assert_eq!(file_name_of(Path::new("plain")), "plain");
 }

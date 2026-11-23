@@ -482,6 +482,41 @@ describe("App: save", () => {
   });
 });
 
+describe("App: sidebar", () => {
+  const app = () => document.querySelector(".app")!;
+
+  it("collapses and expands from the button, Ctrl+B and the palette, and remembers it", async () => {
+    const { unmount } = render(<App />);
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
+    expect(app()).toHaveClass("sidebar-collapsed");
+    expect(screen.getByRole("button", { name: "Expand menu" })).toHaveAttribute("aria-expanded", "false");
+
+    press({ key: "b", ctrlKey: true });
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+
+    press({ key: "k", ctrlKey: true });
+    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "collapse menu");
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Search commands" }), { key: "Enter" });
+    expect(app()).toHaveClass("sidebar-collapsed");
+
+    // Persisted across launches.
+    unmount();
+    render(<App />);
+    expect(app()).toHaveClass("sidebar-collapsed");
+    await userEvent.click(screen.getByRole("button", { name: "Expand menu" }));
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+  });
+
+  it("Ctrl+B while typing in a field does not toggle the menu", async () => {
+    render(<App />);
+    press({ key: "k", ctrlKey: true });
+    const box = await screen.findByRole("textbox", { name: "Search commands" });
+    fireEvent.keyDown(box, { key: "b", ctrlKey: true });
+    expect(app()).not.toHaveClass("sidebar-collapsed");
+  });
+});
+
 describe("App: unsaved-changes guards", () => {
   async function dirtyApp() {
     render(<App />);
@@ -536,6 +571,91 @@ describe("App: unsaved-changes guards", () => {
     await openDoc(1);
     expect(await tauriMock.requestClose()).toBe(false);
     expect(tauriMock.ask).not.toHaveBeenCalled();
+  });
+});
+
+describe("App: updates", () => {
+  const status = (s: Partial<{ configured: boolean; available: boolean; version: string | null }>) => ({
+    currentVersion: "0.1.0",
+    configured: true,
+    available: false,
+    version: null,
+    notes: null,
+    ...s,
+  });
+  const found = status({ available: true, version: "0.2.0" });
+  async function runCommand(text: string) {
+    press({ key: "k", ctrlKey: true });
+    const box = await screen.findByRole("textbox", { name: "Search commands" });
+    await userEvent.type(box, text);
+    fireEvent.keyDown(box, { key: "Enter" });
+  }
+
+  it("reports an update found at launch and installs it from the palette", async () => {
+    tauriMock.handle("check_update", () => found);
+    tauriMock.handle("install_update", () => null);
+    render(<App />);
+    await screen.findByText("NovaPDF 0.2.0 is available. Install it from the command palette.");
+    await runCommand("install novapdf 0.2.0");
+    await waitFor(() => expect(tauriMock.calls("install_update")).toHaveLength(1));
+    expect(tauriMock.ask).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet at launch when the check fails, and offers no install", async () => {
+    render(<App />);
+    await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
+    expect(document.querySelector(".toast")).toBeNull();
+    press({ key: "k", ctrlKey: true });
+    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "install novapdf");
+    expect(screen.getByRole("option", { name: /Install NovaPDF update/ })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("Check for updates reports each outcome", async () => {
+    tauriMock.handle("check_update", () => status({ configured: false }));
+    render(<App />);
+    await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
+    await runCommand("check for updates");
+    await screen.findByText(/This build can't update itself/);
+
+    tauriMock.handle("check_update", () => status({}));
+    await runCommand("check for updates");
+    await screen.findByText("NovaPDF is up to date (version 0.1.0).");
+
+    tauriMock.handle("check_update", () => found);
+    await runCommand("check for updates");
+    await screen.findByText("NovaPDF 0.2.0 is available.");
+
+    tauriMock.handle("check_update", () => {
+      throw new Error("offline");
+    });
+    await runCommand("check for updates");
+    await screen.findByText("Couldn't check for updates: offline");
+  });
+
+  it("asks before installing over unsaved changes, and reports a failed install", async () => {
+    tauriMock.handle("check_update", () => found);
+    tauriMock.handle("install_update", () => {
+      throw new Error("bad signature");
+    });
+    render(<App />);
+    await openDoc(2, "a.pdf");
+    await nav(/Page Organizer/);
+    press({ key: "Delete" });
+
+    tauriMock.ask.mockResolvedValue(false);
+    await runCommand("install novapdf 0.2.0");
+    await waitFor(() =>
+      expect(tauriMock.ask).toHaveBeenCalledWith(
+        "You have unsaved changes. NovaPDF restarts to install the update. Continue?",
+        expect.anything(),
+      ),
+    );
+    expect(tauriMock.calls("install_update")).toHaveLength(0);
+
+    tauriMock.ask.mockResolvedValue(true);
+    await runCommand("install novapdf 0.2.0");
+    await screen.findByText("Couldn't install the update: bad signature");
+    expect(tauriMock.calls("install_update")).toHaveLength(1);
   });
 });
 

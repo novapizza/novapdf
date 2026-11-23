@@ -42,3 +42,33 @@ fn other_hosts_and_schemes_are_rejected() {
         assert!(!allowed(url), "{url} should be rejected");
     }
 }
+
+// ---------- drop overlay ----------
+
+#[test]
+fn only_file_drags_show_the_drop_overlay() {
+    use tauri::PhysicalPosition;
+    let position = PhysicalPosition::new(10.0, 20.0);
+    let files = vec![PathBuf::from(r"C:\docs\a.pdf")];
+    assert_eq!(drag_hover(&DragDropEvent::Enter { paths: files.clone(), position }), Some(true));
+    assert_eq!(
+        drag_hover(&DragDropEvent::Enter { paths: Vec::new(), position }),
+        Some(false),
+        "dragged text or links carry no paths"
+    );
+    assert_eq!(drag_hover(&DragDropEvent::Over { position }), None, "moving changes nothing");
+    assert_eq!(drag_hover(&DragDropEvent::Leave), Some(false));
+    assert_eq!(drag_hover(&DragDropEvent::Drop { paths: files, position }), Some(false));
+}
+
+// ---------- macOS open-documents event ----------
+
+#[test]
+fn opened_urls_keep_only_local_files() {
+    let file = if cfg!(windows) { "file:///C:/docs/a%20b.pdf" } else { "file:///docs/a%20b.pdf" };
+    let urls = ["https://example.com/x.pdf", file, "mailto:a@b.c"]
+        .map(|s| Url::parse(s).unwrap())
+        .to_vec();
+    let expected = if cfg!(windows) { r"C:\docs\a b.pdf" } else { "/docs/a b.pdf" };
+    assert_eq!(file_paths(urls), vec![PathBuf::from(expected)]);
+}

@@ -482,6 +482,13 @@ input[type="range"]::-webkit-slider-thumb {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100%;
+  transition: grid-template-columns 160ms ease;
+}
+.app.sidebar-collapsed {
+  --sidebar-w: 72px;
+}
+.sidebar.collapsed .brand-mark {
+  display: none;
 }
 .workspace {
   /* flex, not grid: the tool row is present only in some sections */
@@ -494,9 +501,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* ---- sidebar ---- */
 .sidebar {
+  container: sidebar / inline-size;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   background: var(--surface-low);
   box-shadow: var(--shadow-soft);
   z-index: 3;
@@ -518,6 +528,37 @@ input[type="range"]::-webkit-slider-thumb {
   color: #fff;
   box-shadow: 0 2px 6px rgba(9, 76, 178, 0.2);
 }
+.brand-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.sidebar-toggle {
+  flex: none;
+  color: var(--on-surface-variant);
+}
+/* Label tooltip for the icons-only sidebar (Sidebar in Shell.tsx sets the delay). */
+.side-tip {
+  position: fixed;
+  z-index: 100;
+  transform: translateY(-50%);
+  padding: 5px 10px;
+  border-radius: var(--r);
+  background: var(--on-surface);
+  color: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-float);
+  animation: side-tip-in 120ms ease-out;
+}
+@keyframes side-tip-in {
+  from {
+    opacity: 0;
+  }
+}
 .brand-name {
   display: block;
   font-family: var(--font-serif);
@@ -525,14 +566,6 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 22px;
   font-weight: 700;
   letter-spacing: -0.015em;
-}
-.brand-sub {
-  display: block;
-  font-family: var(--font-label);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--on-surface-variant);
 }
 .nav {
   flex: 1;
@@ -649,6 +682,48 @@ input[type="range"]::-webkit-slider-thumb {
 .theme-row .segmented button {
   height: 24px;
   padding: 0 7px;
+}
+
+/* Compact sidebar: icons only. Applies whenever the sidebar is narrow, either
+   because the user collapsed it or because the window is narrow. */
+@container sidebar (max-width: 120px) {
+  .brand-text,
+  .nav-label,
+  .nav-heading,
+  .soon-dot,
+  .sidebar-foot .device-text,
+  .switch-row > span,
+  .theme-row > .switch-title {
+    display: none;
+  }
+  .theme-row {
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .theme-row .segmented {
+    flex-direction: column;
+  }
+  .brand {
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px 0;
+  }
+  .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-heading {
+    display: block;
+    height: 12px;
+    padding: 0;
+    font-size: 0;
+  }
+  .device-card,
+  .switch-row {
+    justify-content: center;
+    padding: 10px 0;
+  }
 }
 
 /* ---- top bar: document tabs · search · history · file actions ---- */
@@ -2612,40 +2687,9 @@ kbd {
   :root {
     --sidebar-w: 72px;
   }
-  .brand > span:last-child,
-  .nav-label,
-  .nav-heading,
-  .soon-dot,
-  .sidebar-foot .device-text,
-  .switch-row > span,
-  .theme-row > .switch-title {
+  /* Always compact here (see the sidebar container query), so the toggle has nothing to do. */
+  .sidebar-toggle {
     display: none;
-  }
-  .theme-row {
-    justify-content: center;
-    padding: 4px 0;
-  }
-  .theme-row .segmented {
-    flex-direction: column;
-  }
-  .brand {
-    justify-content: center;
-    padding: 18px 0;
-  }
-  .nav-item {
-    justify-content: center;
-    padding: 0;
-  }
-  .nav-heading {
-    display: block;
-    height: 12px;
-    padding: 0;
-    font-size: 0;
-  }
-  .device-card,
-  .switch-row {
-    justify-content: center;
-    padding: 10px 0;
   }
   .search-box {
     min-width: 0;

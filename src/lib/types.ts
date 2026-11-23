@@ -122,6 +122,15 @@ export interface LayoutResult {
   lineStarts: number[];
 }
 
+export interface UpdateStatus {
+  currentVersion: string;
+  /** False in builds without an updater endpoint, such as development builds. */
+  configured: boolean;
+  available: boolean;
+  version: string | null;
+  notes: string | null;
+}
+
 export const EMPTY_EDITS: PageEdits = { removedObjects: [], removedAnnots: [], blocks: [] };
 
 export function editsAreEmpty(e: PageEdits): boolean {

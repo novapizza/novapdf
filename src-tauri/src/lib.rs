@@ -2,11 +2,12 @@ mod commands;
 pub mod geometry;
 mod host;
 pub mod protocol;
-mod sandbox;
+pub mod sandbox;
 pub mod shared;
+mod update;
 pub mod worker;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tauri::webview::{PageLoadEvent, Url};
@@ -54,8 +55,13 @@ pub fn run() {
             focus_main(app);
         }));
     }
+    let context = tauri::generate_context!();
+    if update::configured(&context.config().plugins) {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
     builder
         .plugin(tauri_plugin_dialog::init())
+        .manage(update::PendingUpdate::default())
         .setup(|app| {
             // The PDFium library is bundled as a resource under `pdfium/`.
             let lib_dir = app.path().resource_dir().ok().map(|dir| dir.join("pdfium"));
@@ -112,25 +118,32 @@ pub fn run() {
                     handle.state::<AppState>().pool.trim_idle();
                 }
             });
+
+            // macOS has no Job Object: the host enforces the worker memory cap itself.
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut tick = tokio::time::interval(crate::sandbox::MEMORY_POLL);
+                    loop {
+                        tick.tick().await;
+                        handle.state::<AppState>().pool.enforce_memory_limit();
+                    }
+                });
+            }
             Ok(())
         })
-        .on_window_event(|window, event| match event {
-            // "drag-hover" shows or hides the drop overlay. Only file drags show it,
-            // not dragged text or links (they carry no paths).
-            WindowEvent::DragDrop(DragDropEvent::Enter { paths, .. }) => {
-                let _ = window.emit("drag-hover", !paths.is_empty());
+        .on_window_event(|window, event| {
+            let WindowEvent::DragDrop(drag) = event else { return };
+            if let Some(over) = drag_hover(drag) {
+                let _ = window.emit("drag-hover", over);
             }
-            WindowEvent::DragDrop(DragDropEvent::Leave) => {
-                let _ = window.emit("drag-hover", false);
-            }
-            WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
-                let _ = window.emit("drag-hover", false);
+            if let DragDropEvent::Drop { paths, .. } = drag {
                 window.state::<AppState>().grant(paths);
                 let list: Vec<String> =
                     paths.iter().map(|p| p.to_string_lossy().into_owned()).collect();
                 let _ = window.emit("files-dropped", list);
             }
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::open_with_dialog,
@@ -143,29 +156,45 @@ pub fn run() {
             commands::layout_text,
             commands::save_with_dialog,
             commands::list_fonts,
+            update::check_update,
+            update::install_update,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             // macOS passes no file on the command line. Finder sends an "open
             // documents" event instead, at startup and while the app runs.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = event {
-                let paths = urls.into_iter().filter_map(|u| u.to_file_path().ok()).collect();
-                queue_launch_and_notify(app, paths);
+                queue_launch_and_notify(app, file_paths(urls));
             }
             #[cfg(not(target_os = "macos"))]
             let _ = (app, event);
         });
 }
 
+/// What a native drag event means for the drop overlay ("drag-hover"): `Some(true)`
+/// to show it, `Some(false)` to hide it, `None` to leave it. Only file drags show it,
+/// not dragged text or links, which carry no paths.
+fn drag_hover(event: &DragDropEvent) -> Option<bool> {
+    match event {
+        DragDropEvent::Enter { paths, .. } => Some(!paths.is_empty()),
+        DragDropEvent::Drop { .. } | DragDropEvent::Leave => Some(false),
+        _ => None,
+    }
+}
+
+/// The local files among the URLs macOS asks us to open. Other schemes are ignored.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn file_paths(urls: Vec<Url>) -> Vec<PathBuf> {
+    urls.into_iter().filter_map(|u| u.to_file_path().ok()).collect()
+}
+
 /// Grants and queues files the OS asked us to open, then nudges the UI to take them.
 /// The UI also takes the queue once when it loads, so a nudge sent too early is harmless.
-fn queue_launch_and_notify(app: &tauri::AppHandle, paths: Vec<std::path::PathBuf>) {
-    if let Some(state) = app.try_state::<AppState>() {
-        if state.queue_launch(paths) {
-            let _ = app.emit("launch-files", ());
-        }
+fn queue_launch_and_notify(app: &tauri::AppHandle, paths: Vec<PathBuf>) {
+    if app.try_state::<AppState>().is_some_and(|state| state.queue_launch(paths)) {
+        let _ = app.emit("launch-files", ());
     }
 }
 
