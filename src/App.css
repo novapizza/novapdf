@@ -2708,6 +2708,50 @@ kbd {
   }
 }
 
+/* ---------------------------------------------------------------------
+   Drop overlay — shown while files are dragged over the window
+   --------------------------------------------------------------------- */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+  /* The OS delivers the drop; the overlay must never swallow the pointer. */
+  pointer-events: none;
+  animation: fade-in 0.12s ease-out;
+}
+.drop-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(440px, 100%);
+  padding: 48px 24px;
+  border-radius: var(--r-xl);
+  background: var(--surface-lowest);
+  outline: 2px dashed var(--primary);
+  outline-offset: -10px;
+  box-shadow: var(--shadow-modal);
+  color: var(--on-surface);
+  text-align: center;
+}
+.drop-target .tile-icon {
+  margin-bottom: 8px;
+}
+.drop-target b {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 28px;
+}
+.drop-target span:last-child {
+  color: var(--secondary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -15,6 +15,7 @@ function backend() {
   tauriMock.handle("extract_page", () => pageText());
   tauriMock.handle("close_document", () => null);
   tauriMock.handle("layout_text", () => ({ lineStarts: [0] }));
+  tauriMock.handle("take_launch_files", () => []);
 }
 const openReturns = (...docs: ReturnType<typeof doc>[]) =>
   tauriMock.handle("open_with_dialog", () => docs.map(opened));
@@ -141,6 +142,45 @@ describe("App: start and open", () => {
     });
     await act(async () => tauriMock.emit("files-dropped", ["x.pdf"]));
     expect(await screen.findByText("This file was not dropped onto the window.")).toBeInTheDocument();
+  });
+
+  it("shows the drop overlay while files are dragged over the window", async () => {
+    render(<App />);
+    const overlay = () => screen.queryByText("Drop PDFs to open");
+    expect(overlay()).not.toBeInTheDocument();
+    await act(async () => tauriMock.emit("drag-hover", true));
+    expect(overlay()).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveClass("drop-overlay");
+    await act(async () => tauriMock.emit("drag-hover", false));
+    expect(overlay()).not.toBeInTheDocument();
+  });
+
+  it("opens the file the app was launched with", async () => {
+    tauriMock.handle("take_launch_files", () => ["C:\\docs\\clicked.pdf"]);
+    tauriMock.handle("open_dropped", (a) => (a.paths as string[]).map(() => opened(doc(400 + nextDoc++, 2, "clicked.pdf"))));
+    render(<App />);
+    expect(await screen.findByText("Opened clicked.pdf (2 pages)")).toBeInTheDocument();
+    expect(tauriMock.calls("open_dropped")).toEqual([{ paths: ["C:\\docs\\clicked.pdf"] }]);
+    expect(tabNames()).toEqual(["clicked.pdf"]);
+  });
+
+  it("opens files a later launch hands to the running app", async () => {
+    render(<App />);
+    await waitFor(() => expect(tauriMock.calls("take_launch_files")).toHaveLength(1));
+    expect(tauriMock.calls("open_dropped")).toEqual([]); // nothing queued at startup
+    tauriMock.handle("take_launch_files", () => ["C:\\docs\\later.pdf"]);
+    tauriMock.handle("open_dropped", () => [opened(doc(450 + nextDoc++, 1, "later.pdf"))]);
+    await act(async () => tauriMock.emit("launch-files", null));
+    expect(await screen.findByText("Opened later.pdf (1 page)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["later.pdf"]);
+  });
+
+  it("a failure to fetch launch files shows an error", async () => {
+    tauriMock.handle("take_launch_files", () => {
+      throw "Backend gone";
+    });
+    render(<App />);
+    expect(await screen.findByText("Backend gone")).toBeInTheDocument();
   });
 
   it("opening another file keeps the first one open in its tab", async () => {

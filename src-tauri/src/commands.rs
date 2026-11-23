@@ -1,8 +1,9 @@
 //! Tauri commands.
 //!
 //! Security model for file access: the web UI never supplies a path to read or write.
-//! Paths come from native dialogs opened here, or from OS drag-and-drop events that
-//! Rust records as one-time grants before the UI hears about them.
+//! Paths come from native dialogs opened here, or from OS drag-and-drop events and
+//! launch command lines (a double-clicked PDF), which Rust records as one-time grants
+//! before the UI hears about them.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -26,6 +27,25 @@ pub struct AppState {
     pub pool: Pool,
     grants: Mutex<HashSet<PathBuf>>,
     open_files: Mutex<OpenFiles>,
+    /// Files named on a launch's command line, granted and waiting for the UI to take.
+    launch: Mutex<Vec<PathBuf>>,
+}
+
+/// The most files one launch (or one drop) may hand the app.
+const MAX_OPEN_BATCH: usize = 500;
+
+/// The files a launch names on its command line. Windows starts `NovaPDF.exe "<file>"`
+/// when the user opens a PDF that NovaPDF is the default app for, and a second launch
+/// forwards its arguments to the running app. `args[0]` is the program; flags are
+/// skipped; relative paths resolve against the launch's working directory.
+pub(crate) fn launch_paths<S: AsRef<std::ffi::OsStr>>(args: &[S], cwd: &Path) -> Vec<PathBuf> {
+    args.iter()
+        .skip(1)
+        .map(|a| Path::new(a.as_ref()))
+        .filter(|p| !p.as_os_str().is_empty() && !p.to_string_lossy().starts_with('-'))
+        .take(MAX_OPEN_BATCH)
+        .map(|p| if p.is_absolute() { p.to_path_buf() } else { cwd.join(p) })
+        .collect()
 }
 
 /// Size and modification time: a file whose stamp changed is opened afresh.
@@ -69,7 +89,32 @@ fn identify(path: &Path) -> Option<(PathBuf, FileStamp)> {
 
 impl AppState {
     pub fn new(pool: Pool) -> Self {
-        Self { pool, grants: Mutex::new(HashSet::new()), open_files: Mutex::new(OpenFiles::default()) }
+        Self {
+            pool,
+            grants: Mutex::new(HashSet::new()),
+            open_files: Mutex::new(OpenFiles::default()),
+            launch: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Grants files named on a launch's command line and queues them for the UI.
+    /// The queue, not an event, carries them: at startup the UI is not listening yet.
+    /// Returns whether anything was queued.
+    pub fn queue_launch(&self, paths: Vec<PathBuf>) -> bool {
+        if paths.is_empty() {
+            return false;
+        }
+        self.grant(&paths);
+        self.launch.lock().unwrap().extend(paths);
+        true
+    }
+
+    /// Hands the queued launch files to the UI, once.
+    fn take_launch(&self) -> Vec<String> {
+        std::mem::take(&mut *self.launch.lock().unwrap())
+            .into_iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
     }
 
     /// Called from the native drag-and-drop handler.
@@ -203,7 +248,7 @@ pub async fn open_dropped(
     paths: Vec<String>,
 ) -> Result<Vec<OpenOutcome>, String> {
     let mut out = Vec::new();
-    for p in paths.into_iter().take(500) {
+    for p in paths.into_iter().take(MAX_OPEN_BATCH) {
         let path = PathBuf::from(&p);
         if !state.take_grant(&path) {
             out.push(OpenOutcome {
@@ -227,6 +272,13 @@ pub async fn open_dropped(
         out.push(open_path(&state, path).await);
     }
     Ok(out)
+}
+
+/// Files the app was launched with (by the OS, e.g. a double-clicked PDF), already
+/// granted. The UI then opens them through `open_dropped`, like a drop.
+#[tauri::command]
+pub fn take_launch_files(state: State<'_, AppState>) -> Vec<String> {
+    state.take_launch()
 }
 
 #[tauri::command]

@@ -210,6 +210,51 @@ fn grants_are_one_time() {
     assert!(state.take_grant(&a));
 }
 
+// ---------- launch command line ----------
+
+#[test]
+fn launch_paths_skip_the_program_and_flags_and_resolve_relative_paths() {
+    let cwd = std::env::temp_dir();
+    let abs = cwd.join("abs.pdf");
+    let args = [
+        "C:\\Program Files\\NovaPDF\\novapdf.exe".to_string(),
+        abs.to_string_lossy().into_owned(),
+        "--flag".into(),
+        String::new(),
+        "rel.pdf".into(),
+    ];
+    assert_eq!(launch_paths(&args, &cwd), vec![abs, cwd.join("rel.pdf")]);
+    assert!(launch_paths(&args[..1], &cwd).is_empty(), "a plain launch names no files");
+    assert!(launch_paths::<String>(&[], &cwd).is_empty());
+}
+
+#[test]
+fn launch_paths_are_capped() {
+    let cwd = std::env::temp_dir();
+    let args: Vec<String> = std::iter::once("app.exe".to_string())
+        .chain((0..MAX_OPEN_BATCH + 10).map(|i| format!("{i}.pdf")))
+        .collect();
+    assert_eq!(launch_paths(&args, &cwd).len(), MAX_OPEN_BATCH);
+}
+
+#[test]
+fn launch_files_are_granted_and_taken_once() {
+    let state = AppState::new(Pool::new(None).unwrap());
+    assert!(!state.queue_launch(Vec::new()), "nothing to queue");
+    assert!(state.take_launch().is_empty());
+
+    let a = PathBuf::from("C:\\docs\\a.pdf");
+    let b = PathBuf::from("C:\\docs\\b.pdf");
+    assert!(state.queue_launch(vec![a.clone()]));
+    assert!(state.queue_launch(vec![b.clone()]), "a second launch adds to the queue");
+    let taken = state.take_launch();
+    assert_eq!(taken, vec![a.to_string_lossy(), b.to_string_lossy()]);
+    assert!(state.take_launch().is_empty(), "taken once");
+    // The UI opens them through open_dropped, which needs the grant.
+    assert!(state.take_grant(&a));
+    assert!(state.take_grant(&b));
+}
+
 // ---------- argument / result JSON (must match src/lib/api.ts) ----------
 
 #[test]
