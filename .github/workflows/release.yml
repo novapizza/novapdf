@@ -212,24 +212,63 @@ jobs:
     environment: Production
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 rejects the default CRC checksums newer AWS CLI versions send.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_RELEASES_ACCOUNT_ID: ${{ secrets.R2_RELEASES_ACCOUNT_ID }}
+      R2_RELEASES_BUCKET: ${{ secrets.R2_RELEASES_BUCKET }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          # Manifests attached by an earlier run are regenerated below.
+          rm -f assets/latest.yml assets/latest.json
+          # The bundler names the macOS updater bundle after the product only, so
+          # every release would overwrite one key in the flat bucket while an
+          # older latest.json still points at it. Version it like the .dmg.
+          VERSION="${TAG#v}"
+          for f in assets/NovaPDF_universal.app.tar.gz assets/NovaPDF_universal.app.tar.gz.sig; do
+            [ -e "$f" ] || continue
+            mv -v "$f" "assets/NovaPDF_${VERSION}_universal.${f#assets/NovaPDF_universal.}"
+          done
           ls -l assets
 
-      - name: Upload to R2
+      - name: Write release manifests
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          # R2 rejects the default CRC checksums newer AWS CLI versions send.
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          R2_RELEASES_ACCOUNT_ID: ${{ secrets.R2_RELEASES_ACCOUNT_ID }}
-          R2_RELEASES_BUCKET: ${{ secrets.R2_RELEASES_BUCKET }}
+          RELEASE_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          mkdir -p manifest
+          node scripts/write-release-manifest.mjs assets manifest/latest.yml
+
+      - name: Upload installers to R2
         run: |
           aws s3 cp assets/ "s3://$R2_RELEASES_BUCKET/" --recursive \
-            --endpoint-url "https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com"
+            --endpoint-url "https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com" \
+            --cache-control "public, max-age=31536000, immutable" --no-progress
+
+      # After the installers: a manifest must never name a file that is not up
+      # yet. Uncached, because these are the only keys whose content changes.
+      - name: Publish manifests to R2
+        run: |
+          ENDPOINT="https://$R2_RELEASES_ACCOUNT_ID.r2.cloudflarestorage.com"
+          aws s3 cp manifest/latest.yml "s3://$R2_RELEASES_BUCKET/latest.yml" \
+            --endpoint-url "$ENDPOINT" --content-type "text/yaml; charset=utf-8" \
+            --cache-control "no-cache, must-revalidate" --no-progress
+          # Absent for an unsigned build; the previous latest.json then stays, so
+          # installed apps keep pointing at an update they can verify.
+          if [ -f manifest/latest.json ]; then
+            aws s3 cp manifest/latest.json "s3://$R2_RELEASES_BUCKET/latest.json" \
+              --endpoint-url "$ENDPOINT" --content-type "application/json; charset=utf-8" \
+              --cache-control "no-cache, must-revalidate" --no-progress
+          else
+            echo "::warning::no latest.json, this release is not an update source"
+          fi
+
+      - name: Attach manifests to the GitHub release
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" manifest/latest.* --clobber
