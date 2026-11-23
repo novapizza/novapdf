@@ -83,6 +83,14 @@ jobs:
           codesign --verify --strict --verbose=2 src-tauri/pdfium/libpdfium.dylib
           lipo -archs src-tauri/pdfium/libpdfium.dylib
 
+      - name: Prepare updater config
+        id: updater
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: node scripts/updater-config.mjs src-tauri/tauri.updater.conf.json >> "$GITHUB_OUTPUT"
+
       - name: Build and publish macOS (universal binary)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -93,12 +101,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Signs the updater bundle (.sig files) that latest.json is built from.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: NovaPDF ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          args: --target universal-apple-darwin
+          # publish-r2 writes latest.json with R2 URLs instead.
+          includeUpdaterJson: false
+          args: --target universal-apple-darwin ${{ steps.updater.outputs.config }}
 
   build-windows:
     name: Build and Publish Windows
@@ -184,6 +197,14 @@ jobs:
           } | ConvertTo-Json -Depth 6 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
           "TAURI_SIGN_CONFIG=$env:RUNNER_TEMP\tauri-sign.json" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Prepare updater config
+        id: updater
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: node scripts/updater-config.mjs src-tauri/tauri.updater.conf.json >> "$GITHUB_OUTPUT"
+
       - name: Build and publish Windows
         uses: tauri-apps/tauri-action@v0
         env:
@@ -193,12 +214,17 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          # Signs the updater bundle (.sig files) that latest.json is built from.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: NovaPDF ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          args: --config ${{ env.TAURI_SIGN_CONFIG }}
+          # publish-r2 writes latest.json with R2 URLs instead.
+          includeUpdaterJson: false
+          args: --config ${{ env.TAURI_SIGN_CONFIG }} ${{ steps.updater.outputs.config }}
 
   publish-r2:
     name: Upload release to R2

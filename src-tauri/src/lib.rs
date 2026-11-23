@@ -4,6 +4,7 @@ mod host;
 pub mod protocol;
 pub mod sandbox;
 pub mod shared;
+mod update;
 pub mod worker;
 
 use std::time::Duration;
@@ -52,8 +53,13 @@ pub fn run() {
             focus_main(app);
         }));
     }
+    let context = tauri::generate_context!();
+    if update::configured(&context.config().plugins) {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
     builder
         .plugin(tauri_plugin_dialog::init())
+        .manage(update::PendingUpdate::default())
         .setup(|app| {
             // The PDFium library is bundled as a resource under `pdfium/`.
             let lib_dir = app.path().resource_dir().ok().map(|dir| dir.join("pdfium"));
@@ -137,8 +143,10 @@ pub fn run() {
             commands::layout_text,
             commands::save_with_dialog,
             commands::list_fonts,
+            update::check_update,
+            update::install_update,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 

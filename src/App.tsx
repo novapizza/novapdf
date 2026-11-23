@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 import { api, errorMessage } from "./lib/api";
-import type { OpenOutcome, PageEdits, Watermark } from "./lib/types";
+import type { OpenOutcome, PageEdits, UpdateStatus, Watermark } from "./lib/types";
 import { editsAreEmpty } from "./lib/types";
 import {
   type Action,
@@ -75,6 +75,20 @@ export default function App() {
   useEffect(() => {
     api.listFonts().then(setFonts).catch(() => {});
   }, []);
+
+  // Released builds look for a newer version once at launch. Only a found update
+  // is reported; a failed or unconfigured check stays quiet.
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  useEffect(() => {
+    api
+      .checkUpdate()
+      .then((s) => {
+        if (!s.available) return;
+        setUpdate(s);
+        notify(`NovaPDF ${s.version} is available. Install it from the command palette.`);
+      })
+      .catch(() => {});
+  }, [notify]);
 
   // Keep refs for event handlers registered once.
   const stateRef = useRef({ ws, tabs: tabState.tabs, tabId, section });
@@ -201,6 +215,40 @@ export default function App() {
   const activateTab = (id: string) => {
     tabsDispatch({ type: "activate", id });
     if (!docMode && section !== "grid") setSection("read");
+  };
+
+  // ---------- updates ----------
+
+  const checkForUpdates = async () => {
+    try {
+      const s = await api.checkUpdate();
+      setUpdate(s.available ? s : null);
+      if (!s.configured) notify("This build can't update itself. Download new versions from the NovaPDF website.");
+      else if (s.available) notify(`NovaPDF ${s.version} is available.`);
+      else notify(`NovaPDF is up to date (version ${s.currentVersion}).`);
+    } catch (err) {
+      notify(`Couldn't check for updates: ${errorMessage(err)}`, "error");
+    }
+  };
+
+  /** Installing restarts the app, so unsaved work is confirmed first, as on quit. */
+  const installUpdate = async () => {
+    if (busy) return;
+    const unsaved = stateRef.current.tabs.filter(isDirty).length;
+    if (unsaved) {
+      const what = unsaved === 1 ? "You have unsaved changes" : `${unsaved} documents have unsaved changes`;
+      if (!(await ask(`${what}. NovaPDF restarts to install the update. Continue?`, { title: "NovaPDF", kind: "warning" })))
+        return;
+    }
+    try {
+      setBusy("Installing update…");
+      await api.installUpdate();
+    } catch (err) {
+      setUpdate(null);
+      notify(`Couldn't install the update: ${errorMessage(err)}`, "error");
+    } finally {
+      setBusy(null);
+    }
   };
 
   // ---------- saving ----------
@@ -404,6 +452,8 @@ export default function App() {
     { id: "t-light", title: "Use light theme", description: theme === "light" ? "Current theme" : "Switch the interface to light", icon: "sun", tag: "View", run: theme === "light" ? undefined : () => setTheme("light") },
     { id: "t-dark", title: "Use dark theme", description: theme === "dark" ? "Current theme" : "Switch the interface to dark", icon: "moon", tag: "View", run: theme === "dark" ? undefined : () => setTheme("dark") },
     { id: "t-system", title: "Match system theme", description: theme === "system" ? "Current theme" : "Follow the Windows light/dark setting", icon: "monitor", tag: "View", run: theme === "system" ? undefined : () => setTheme("system") },
+    { id: "update-check", title: "Check for updates", description: "Look for a newer version of NovaPDF", icon: "download", tag: "Action", run: checkForUpdates },
+    { id: "update-install", title: `Install NovaPDF ${update?.version ?? "update"}`, description: "Download the update and restart NovaPDF", icon: "download", tag: "Action", run: update ? installUpdate : undefined },
     { id: "s-hl", title: "Highlight text", description: "Not available yet", icon: "highlighter", tag: "Soon" },
     { id: "s-note", title: "Sticky note", description: "Not available yet", icon: "note", tag: "Soon" },
     { id: "s-ink", title: "Freehand ink", description: "Not available yet", icon: "ink", tag: "Soon" },
