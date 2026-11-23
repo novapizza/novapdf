@@ -31,6 +31,21 @@ test("opens a dropped PDF and renders its pages with PDFium", async ({ app }) =>
   await expect(page.getByRole("button", { name: "Go to page 3" })).toBeVisible();
 });
 
+test("dragging files over the window shows the drop overlay until they leave or drop", async ({ app }) => {
+  const { page } = app;
+  const overlay = page.getByText("Drop PDFs to open");
+  await app.dragHover(true);
+  await expect(overlay).toBeVisible();
+  await app.dragHover(false);
+  await expect(overlay).toBeHidden();
+  // A drop: the native handler hides the overlay, then hands over the files.
+  await app.dragHover(true);
+  await app.dragHover(false);
+  await app.drop([FIXTURES.sample]);
+  await expect(toast(page, "Opened sample.pdf (3 pages)")).toBeVisible();
+  await expect(overlay).toBeHidden();
+});
+
 test("each opened file gets its own tab with its own pages", async ({ app }) => {
   const { page } = app;
   await app.drop([FIXTURES.sample]);

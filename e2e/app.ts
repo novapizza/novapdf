@@ -23,18 +23,34 @@ export interface AppOptions {
   saveTo?: string;
   /** Keep the release behaviour: a second launch focuses this app and exits. */
   singleInstance?: boolean;
+  /** Command-line arguments, as the OS passes a double-clicked file. */
+  args?: string[];
 }
 
 export interface App {
   page: Page;
   /** Opens files through the drop path. Each path must be in `grants`. */
   drop(paths: string[]): Promise<void>;
+  /** Sends what the native handler sends when a file drag enters (true) or leaves (false). */
+  dragHover(over: boolean): Promise<void>;
   /** Sets the files the next Open or Merge dialog returns. */
   pick(paths: string[]): void;
   close(): Promise<void>;
 }
 
 let nextPort = 9300 + Math.floor(Math.random() * 500);
+
+/** Emits a backend event into the app, as the native window handlers do. */
+async function emit(page: Page, event: string, payload: unknown) {
+  await page.evaluate(
+    async ([event, payload]) => {
+      const internals = (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a: unknown) => Promise<unknown> } })
+        .__TAURI_INTERNALS__;
+      await internals.invoke("plugin:event|emit", { event, payload });
+    },
+    [event, payload] as const,
+  );
+}
 
 async function waitForDevtools(port: number, child: ChildProcess, timeoutMs = 60_000) {
   const until = Date.now() + timeoutMs;
@@ -67,7 +83,7 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
     // A fresh profile per launch: no theme or storage carried between tests.
     WEBVIEW2_USER_DATA_FOLDER: profile,
   };
-  const child = spawn(APP_EXE, [], { env, stdio: ["ignore", "ignore", "pipe"] });
+  const child = spawn(APP_EXE, opts.args ?? [], { env, stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
   child.stderr?.on("data", (d) => (stderr += d));
 
@@ -99,11 +115,10 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
       page,
       close,
       async drop(paths) {
-        await page.evaluate(async (payload) => {
-          const internals = (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a: unknown) => Promise<unknown> } })
-            .__TAURI_INTERNALS__;
-          await internals.invoke("plugin:event|emit", { event: "files-dropped", payload });
-        }, paths);
+        await emit(page, "files-dropped", paths);
+      },
+      async dragHover(over) {
+        await emit(page, "drag-hover", over);
       },
       pick(paths) {
         writeFileSync(pickFile, paths.join("\n"));

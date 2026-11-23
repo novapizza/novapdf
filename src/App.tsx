@@ -61,6 +61,8 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const [fonts, setFonts] = useState<string[]>(["Helvetica", "Times", "Courier"]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  /** A file drag is over the window: show the drop overlay. */
+  const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
 
@@ -135,13 +137,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Dropped files open in new tabs. Drops that overlap (a second drop while the
-    // first is still opening) are applied in drop order, so tabs appear in that order.
-    const un = listen<string[]>("files-dropped", (e) => {
+    // Dropped files, and files the OS launched the app with, open in new tabs. Batches
+    // that overlap (a second drop while the first is still opening) are applied in
+    // arrival order, so tabs appear in that order.
+    const openGranted = (paths: string[]) => {
+      if (paths.length === 0) return;
       const d = drops.current;
       d.pending += 1;
       setBusy("Opening…");
-      const opening = api.openDropped(e.payload);
+      const opening = api.openDropped(paths);
       d.chain = d.chain.then(async () => {
         try {
           addOutcomes(await opening, "tabs");
@@ -152,9 +156,19 @@ export default function App() {
           if (d.pending === 0) setBusy(null);
         }
       });
-    });
+    };
+    // Launch files wait in a queue on the Rust side, so none are lost before this
+    // listener exists: take whatever is queued now, and again on each nudge.
+    const takeLaunch = () =>
+      api.takeLaunchFiles().then(openGranted, (err) => notify(errorMessage(err), "error"));
+    const unDrop = listen<string[]>("files-dropped", (e) => openGranted(e.payload));
+    const unHover = listen<boolean>("drag-hover", (e) => setDragging(e.payload));
+    const unLaunch = listen("launch-files", takeLaunch);
+    unLaunch.then(() => takeLaunch());
     return () => {
-      un.then((f) => f());
+      unDrop.then((f) => f());
+      unHover.then((f) => f());
+      unLaunch.then((f) => f());
     };
   }, [addOutcomes, notify]);
 
@@ -700,6 +714,17 @@ export default function App() {
       )}
       {dialog?.kind === "palette" && <CommandPalette commands={commands} onClose={() => setDialog(null)} />}
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+      {dragging && (
+        <div className="drop-overlay" role="status" aria-live="polite">
+          <div className="drop-target">
+            <span className="tile-icon big">
+              <Icon name="upload" size={24} />
+            </span>
+            <b>Drop PDFs to open</b>
+            <span>Each file opens in its own tab.</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

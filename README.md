@@ -91,8 +91,10 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   OpenAction, embedded files and XFA are never copied. With *Sanitize* on (the default), link
   annotations with JavaScript, Launch or remote actions and non-http(s)/mailto URIs are
   removed, as are file-attachment, sound, movie, screen, rich-media and 3D annotations.
-* **UI has no file access.** Open and save dialogs run in Rust. Dropped files are recorded
-  as one-time grants by the native drop handler before the UI hears about them. The UI
+* **UI has no file access.** Open and save dialogs run in Rust. Dropped files, and files
+  the OS opens the app with (a double-clicked PDF: the command line on Windows, an
+  open-documents event on macOS), are recorded as one-time grants in Rust before the UI
+  hears about them. The UI
   capability set has no fs or dialog open/save permissions. A strict CSP is set, and
   navigation away from the app is blocked.
 * **Bounded inputs.** 512 MB file limit with a `%PDF-` header check, bounded IPC frames,

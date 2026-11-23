@@ -26,6 +26,8 @@ export interface RenderRequest {
 export const api = {
   openWithDialog: () => invoke<OpenOutcome[]>("open_with_dialog"),
   openDropped: (paths: string[]) => invoke<OpenOutcome[]>("open_dropped", { paths }),
+  /** Files the OS launched the app with (a double-clicked PDF), already granted for `openDropped`. */
+  takeLaunchFiles: () => invoke<string[]>("take_launch_files"),
   closeDocument: (docId: DocId) => invoke<void>("close_document", { docId }),
 
   async renderPage(req: RenderRequest): Promise<Blob> {

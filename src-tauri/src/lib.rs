@@ -6,12 +6,13 @@ mod sandbox;
 pub mod shared;
 pub mod worker;
 
+use std::path::Path;
 use std::time::Duration;
 
 use tauri::webview::{PageLoadEvent, Url};
 use tauri::{DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-use crate::commands::AppState;
+use crate::commands::{launch_paths, AppState};
 use crate::host::Pool;
 
 /// Only the app's own pages may load in the webview; links can never navigate it.
@@ -47,8 +48,9 @@ pub fn run() {
     let mut builder = tauri::Builder::default();
     if single_instance() {
         // Registered first, so a second launch exits before it starts any workers.
-        // Its arguments are ignored: the app takes no file paths on the command line.
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        // Files it was started with (a PDF double-clicked while the app runs) open here.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            queue_launch_and_notify(app, launch_paths(&argv, Path::new(&cwd)));
             focus_main(app);
         }));
     }
@@ -58,6 +60,12 @@ pub fn run() {
             // The PDFium library is bundled as a resource under `pdfium/`.
             let lib_dir = app.path().resource_dir().ok().map(|dir| dir.join("pdfium"));
             app.manage(AppState::new(Pool::new(lib_dir)?));
+
+            // Files the OS launched us with (a double-clicked PDF). The UI takes them
+            // with `take_launch_files` once it has loaded.
+            let args: Vec<_> = std::env::args_os().collect();
+            let cwd = std::env::current_dir().unwrap_or_default();
+            app.state::<AppState>().queue_launch(launch_paths(&args, &cwd));
 
             // Debug builds only: pre-grant files listed in NOVAPDF_DEV_OPEN (separated by
             // ';') as if they had been dropped on the window, for scripted UI testing.
@@ -106,17 +114,28 @@ pub fn run() {
             });
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+        .on_window_event(|window, event| match event {
+            // "drag-hover" shows or hides the drop overlay. Only file drags show it,
+            // not dragged text or links (they carry no paths).
+            WindowEvent::DragDrop(DragDropEvent::Enter { paths, .. }) => {
+                let _ = window.emit("drag-hover", !paths.is_empty());
+            }
+            WindowEvent::DragDrop(DragDropEvent::Leave) => {
+                let _ = window.emit("drag-hover", false);
+            }
+            WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
+                let _ = window.emit("drag-hover", false);
                 window.state::<AppState>().grant(paths);
                 let list: Vec<String> =
                     paths.iter().map(|p| p.to_string_lossy().into_owned()).collect();
                 let _ = window.emit("files-dropped", list);
             }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::open_with_dialog,
             commands::open_dropped,
+            commands::take_launch_files,
             commands::close_document,
             commands::render_page,
             commands::extract_page,
@@ -125,8 +144,29 @@ pub fn run() {
             commands::save_with_dialog,
             commands::list_fonts,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // macOS passes no file on the command line. Finder sends an "open
+            // documents" event instead, at startup and while the app runs.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = event {
+                let paths = urls.into_iter().filter_map(|u| u.to_file_path().ok()).collect();
+                queue_launch_and_notify(app, paths);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
+}
+
+/// Grants and queues files the OS asked us to open, then nudges the UI to take them.
+/// The UI also takes the queue once when it loads, so a nudge sent too early is harmless.
+fn queue_launch_and_notify(app: &tauri::AppHandle, paths: Vec<std::path::PathBuf>) {
+    if let Some(state) = app.try_state::<AppState>() {
+        if state.queue_launch(paths) {
+            let _ = app.emit("launch-files", ());
+        }
+    }
 }
 
 #[cfg(test)]

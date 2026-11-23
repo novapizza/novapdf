@@ -18,11 +18,12 @@ const req = (extra: Partial<RenderRequest> = {}): RenderRequest => ({
 
 describe("api", () => {
   it("passes command names and argument names the Rust side expects", async () => {
-    for (const cmd of ["open_with_dialog", "open_dropped", "close_document", "extract_page", "find_watermarks", "save_with_dialog", "layout_text", "list_fonts"]) {
+    for (const cmd of ["open_with_dialog", "open_dropped", "take_launch_files", "close_document", "extract_page", "find_watermarks", "save_with_dialog", "layout_text", "list_fonts"]) {
       tauriMock.handle(cmd, () => "ok");
     }
     await api.openWithDialog();
     await api.openDropped(["a.pdf"]);
+    await api.takeLaunchFiles();
     await api.closeDocument(3);
     await api.extractPage(3, 4);
     await api.findWatermarks(3, "DRAFT");
@@ -33,6 +34,7 @@ describe("api", () => {
     await api.saveWithDialog(save);
 
     expect(tauriMock.calls("open_dropped")).toEqual([{ paths: ["a.pdf"] }]);
+    expect(tauriMock.calls("take_launch_files")).toEqual([{}]);
     expect(tauriMock.calls("close_document")).toEqual([{ docId: 3 }]);
     expect(tauriMock.calls("extract_page")).toEqual([{ docId: 3, pageIndex: 4 }]);
     expect(tauriMock.calls("find_watermarks")).toEqual([{ docId: 3, text: "DRAFT" }]);
