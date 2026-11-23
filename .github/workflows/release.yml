@@ -49,8 +49,7 @@ jobs:
           # do not also import manually or the two keychains will conflict.
           APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY is optional: set it only if the .p12 contains
-          # multiple identities and you need to pick one explicitly.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           # Apple notarization
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
