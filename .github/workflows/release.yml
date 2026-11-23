@@ -1,0 +1,142 @@
+name: Release
+
+# Triggered by pushing a version tag, e.g.:
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-macos:
+    name: Build and Publish macOS
+    runs-on: macos-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # npm ci runs the postinstall hook which calls scripts/fetch-pdfium.mjs
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish macOS (universal binary)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple signing — tauri-action imports the cert into its own keychain;
+          # do not also import manually or the two keychains will conflict.
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY is optional: set it only if the .p12 contains
+          # multiple identities and you need to pick one explicitly.
+          # Apple notarization
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: NovaPDF ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: false
+          args: --target universal-apple-darwin
+
+  build-windows:
+    name: Build and Publish Windows
+    runs-on: windows-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # npm ci runs the postinstall hook which calls scripts/fetch-pdfium.mjs
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Azure Code Signing SDK
+        run: |
+          # Pinned — bump alongside any Azure Trusted Signing endpoint version change.
+          $sdkVersion = "1.0.60"
+          $uri = "https://www.nuget.org/api/v2/package/Microsoft.Trusted.Signing.Client/$sdkVersion"
+          Invoke-WebRequest -Uri $uri -OutFile "$env:RUNNER_TEMP\tsc.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\tsc.zip" -DestinationPath "$env:RUNNER_TEMP\tsc"
+          $dlibDir = Get-ChildItem "$env:RUNNER_TEMP\tsc\bin" -Directory | Select-Object -First 1
+          $dlibPath = Join-Path $dlibDir.FullName "Azure.CodeSigning.Dlib.dll"
+          if (-not (Test-Path $dlibPath)) {
+            Write-Error "Azure.CodeSigning.Dlib.dll not found under $($dlibDir.FullName). SDK layout may have changed."
+            exit 1
+          }
+          "AZURE_DLIB_PATH=$dlibPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Write Azure Trusted Signing metadata
+        env:
+          AZURE_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_PROFILE: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+        run: |
+          @{
+            Endpoint               = $env:AZURE_ENDPOINT
+            CodeSigningAccountName = $env:AZURE_ACCOUNT
+            CertificateProfileName = $env:AZURE_PROFILE
+          } | ConvertTo-Json | Out-File -FilePath "$env:RUNNER_TEMP\metadata.json" -Encoding utf8
+          "AZURE_METADATA_PATH=$env:RUNNER_TEMP\metadata.json" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Write Tauri Windows signing config
+        run: |
+          # Build the sign command string first so ConvertTo-Json handles all escaping.
+          $signCmd = "signtool.exe sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib `"$env:AZURE_DLIB_PATH`" /dmdf `"$env:AZURE_METADATA_PATH`" %1"
+          @{
+            bundle = @{
+              windows = @{ signCommand = $signCmd }
+            }
+          } | ConvertTo-Json -Depth 5 | Out-File -FilePath "$env:RUNNER_TEMP\tauri-sign.json" -Encoding utf8
+          "TAURI_SIGN_CONFIG=$env:RUNNER_TEMP\tauri-sign.json" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build and publish Windows
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Azure Trusted Signing credentials — read by the dlib at sign time.
+          # azure/login is not needed: the dlib reads these env vars directly.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: NovaPDF ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: false
+          args: --config ${{ env.TAURI_SIGN_CONFIG }}
