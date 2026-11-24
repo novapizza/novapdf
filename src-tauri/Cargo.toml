@@ -1,6 +1,6 @@
 [package]
 name = "novapdf"
-version = "0.1.0"
+version = "0.1.1"
 description = "NovaPDF desktop PDF editor"
 authors = ["NovaPDF"]
 edition = "2024"
