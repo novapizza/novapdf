@@ -1,9 +1,10 @@
 // Integration tests: the whole UI against a fake backend (src/test/tauri.ts).
 // The real backend + PDFium is exercised by the E2E suite in e2e/.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+import { UPDATE_CHECK_INTERVAL_MS } from "./lib/autoUpdate";
 import type { WatermarkScan } from "./lib/types";
 import { tauriMock } from "./test/tauri";
 import { JPEG_BYTES, doc, opened, pageText } from "./test/fixtures";
@@ -575,15 +576,19 @@ describe("App: unsaved-changes guards", () => {
 });
 
 describe("App: updates", () => {
-  const status = (s: Partial<{ configured: boolean; available: boolean; version: string | null }>) => ({
+  const status = (s: Partial<{ configured: boolean; available: boolean; version: string | null; downloaded: boolean }>) => ({
     currentVersion: "0.1.0",
     configured: true,
     available: false,
     version: null,
     notes: null,
+    downloaded: false,
     ...s,
   });
   const found = status({ available: true, version: "0.2.0" });
+  const willInstall =
+    'NovaPDF 0.2.0 will install when you quit. To install it now, choose "Restart to install" in the command palette.';
+  const manual = () => localStorage.setItem("novapdf.autoUpdate", "0");
   async function runCommand(text: string) {
     press({ key: "k", ctrlKey: true });
     const box = await screen.findByRole("textbox", { name: "Search commands" });
@@ -591,71 +596,158 @@ describe("App: updates", () => {
     fireEvent.keyDown(box, { key: "Enter" });
   }
 
-  it("reports an update found at launch and installs it from the palette", async () => {
-    tauriMock.handle("check_update", () => found);
-    tauriMock.handle("install_update", () => null);
-    render(<App />);
-    await screen.findByText("NovaPDF 0.2.0 is available. Install it from the command palette.");
-    await runCommand("install novapdf 0.2.0");
-    await waitFor(() => expect(tauriMock.calls("install_update")).toHaveLength(1));
-    expect(tauriMock.ask).not.toHaveBeenCalled();
-  });
-
-  it("stays quiet at launch when the check fails, and offers no install", async () => {
-    render(<App />);
-    await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
-    expect(document.querySelector(".toast")).toBeNull();
-    press({ key: "k", ctrlKey: true });
-    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "install novapdf");
-    expect(screen.getByRole("option", { name: /Install NovaPDF update/ })).toHaveAttribute("aria-disabled", "true");
-  });
-
-  it("Check for updates reports each outcome", async () => {
-    tauriMock.handle("check_update", () => status({ configured: false }));
-    render(<App />);
-    await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
-    await runCommand("check for updates");
-    await screen.findByText(/This build can't update itself/);
-
-    tauriMock.handle("check_update", () => status({}));
-    await runCommand("check for updates");
-    await screen.findByText("NovaPDF is up to date (version 0.1.0).");
-
-    tauriMock.handle("check_update", () => found);
-    await runCommand("check for updates");
-    await screen.findByText("NovaPDF 0.2.0 is available.");
-
-    tauriMock.handle("check_update", () => {
-      throw new Error("offline");
+  describe("automatic (the default)", () => {
+    it("downloads an update found at launch to install on quit; Restart installs it now", async () => {
+      tauriMock.handle("check_update", () => found);
+      tauriMock.handle("download_update", () => null);
+      tauriMock.handle("install_update", () => null);
+      render(<App />);
+      await screen.findByText(willInstall);
+      expect(tauriMock.calls("download_update")).toHaveLength(1);
+      await runCommand("restart to install novapdf 0.2.0");
+      await waitFor(() => expect(tauriMock.calls("install_update")).toHaveLength(1));
     });
-    await runCommand("check for updates");
-    await screen.findByText("Couldn't check for updates: offline");
+
+    it("re-checks periodically and announces a version only once", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        tauriMock.handle("check_update", () => found);
+        tauriMock.handle("download_update", () => null);
+        render(<App />);
+        await vi.waitFor(() => expect(screen.getByText(willInstall)).toBeInTheDocument());
+        tauriMock.handle("check_update", () => ({ ...found, downloaded: true }));
+        // Long enough for the first toast to expire, so any toast now is a repeat.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS);
+        });
+        expect(tauriMock.calls("check_update")).toHaveLength(2);
+        expect(tauriMock.calls("download_update")).toHaveLength(1);
+        expect(screen.queryByText(willInstall)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stops checking in a build that can't update itself", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        tauriMock.handle("check_update", () => status({ configured: false }));
+        render(<App />);
+        await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2 * UPDATE_CHECK_INTERVAL_MS);
+        });
+        expect(tauriMock.calls("check_update")).toHaveLength(1);
+        expect(document.querySelector(".toast")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a failed background download stays quiet and leaves the update to install by hand", async () => {
+      tauriMock.handle("check_update", () => found);
+      render(<App />); // download_update has no handler, so it fails
+      await screen.findByText("NovaPDF 0.2.0 is available. Install it from the command palette.");
+      expect(document.querySelector(".toast.error")).toBeNull();
+      // A check the user asks for reports the failure.
+      await runCommand("check for updates");
+      await screen.findByText(/Couldn't download NovaPDF 0.2.0: Unexpected Tauri command/);
+    });
+
+    it("turning it off discards the download; turning it on downloads again", async () => {
+      tauriMock.handle("check_update", () => found);
+      tauriMock.handle("download_update", () => null);
+      tauriMock.handle("discard_update", () => null);
+      render(<App />);
+      await screen.findByText(willInstall);
+
+      await runCommand("turn off automatic updates");
+      await screen.findByText("Automatic updates are off. Check for updates from the command palette.");
+      await waitFor(() => expect(tauriMock.calls("discard_update")).toHaveLength(1));
+      expect(localStorage.getItem("novapdf.autoUpdate")).toBe("0");
+      press({ key: "k", ctrlKey: true });
+      await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "install novapdf");
+      expect(screen.getByRole("option", { name: /^Install NovaPDF 0\.2\.0/ })).not.toHaveAttribute("aria-disabled", "true");
+      press({ key: "Escape" });
+
+      await runCommand("turn on automatic updates");
+      await screen.findByText(/Automatic updates are on/);
+      await waitFor(() => expect(tauriMock.calls("download_update")).toHaveLength(2));
+      expect(await screen.findAllByText(willInstall)).toHaveLength(2);
+    });
   });
 
-  it("asks before installing over unsaved changes, and reports a failed install", async () => {
-    tauriMock.handle("check_update", () => found);
-    tauriMock.handle("install_update", () => {
-      throw new Error("bad signature");
+  describe("manual", () => {
+    it("reports an update found at launch and installs it from the palette", async () => {
+      manual();
+      tauriMock.handle("check_update", () => found);
+      tauriMock.handle("install_update", () => null);
+      render(<App />);
+      await screen.findByText("NovaPDF 0.2.0 is available. Install it from the command palette.");
+      expect(tauriMock.calls("download_update")).toHaveLength(0);
+      await runCommand("install novapdf 0.2.0");
+      await waitFor(() => expect(tauriMock.calls("install_update")).toHaveLength(1));
+      expect(tauriMock.ask).not.toHaveBeenCalled();
     });
-    render(<App />);
-    await openDoc(2, "a.pdf");
-    await nav(/Page Organizer/);
-    press({ key: "Delete" });
 
-    tauriMock.ask.mockResolvedValue(false);
-    await runCommand("install novapdf 0.2.0");
-    await waitFor(() =>
-      expect(tauriMock.ask).toHaveBeenCalledWith(
-        "You have unsaved changes. NovaPDF restarts to install the update. Continue?",
-        expect.anything(),
-      ),
-    );
-    expect(tauriMock.calls("install_update")).toHaveLength(0);
+    it("stays quiet at launch when the check fails, and offers no install", async () => {
+      render(<App />);
+      await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
+      expect(document.querySelector(".toast")).toBeNull();
+      press({ key: "k", ctrlKey: true });
+      await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "install novapdf");
+      expect(screen.getByRole("option", { name: /Install NovaPDF update/ })).toHaveAttribute("aria-disabled", "true");
+    });
 
-    tauriMock.ask.mockResolvedValue(true);
-    await runCommand("install novapdf 0.2.0");
-    await screen.findByText("Couldn't install the update: bad signature");
-    expect(tauriMock.calls("install_update")).toHaveLength(1);
+    it("Check for updates reports each outcome", async () => {
+      manual();
+      tauriMock.handle("check_update", () => status({ configured: false }));
+      render(<App />);
+      await waitFor(() => expect(tauriMock.calls("check_update")).toHaveLength(1));
+      await runCommand("check for updates");
+      await screen.findByText(/This build can't update itself/);
+
+      tauriMock.handle("check_update", () => status({}));
+      await runCommand("check for updates");
+      await screen.findByText("NovaPDF is up to date (version 0.1.0).");
+
+      tauriMock.handle("check_update", () => found);
+      await runCommand("check for updates");
+      await screen.findByText("NovaPDF 0.2.0 is available. Install it from the command palette.");
+
+      tauriMock.handle("check_update", () => {
+        throw new Error("offline");
+      });
+      await runCommand("check for updates");
+      await screen.findByText("Couldn't check for updates: offline");
+    });
+
+    it("asks before installing over unsaved changes, and reports a failed install", async () => {
+      manual();
+      tauriMock.handle("check_update", () => found);
+      tauriMock.handle("install_update", () => {
+        throw new Error("bad signature");
+      });
+      render(<App />);
+      await openDoc(2, "a.pdf");
+      await nav(/Page Organizer/);
+      press({ key: "Delete" });
+
+      tauriMock.ask.mockResolvedValue(false);
+      await runCommand("install novapdf 0.2.0");
+      await waitFor(() =>
+        expect(tauriMock.ask).toHaveBeenCalledWith(
+          "You have unsaved changes. NovaPDF restarts to install the update. Continue?",
+          expect.anything(),
+        ),
+      );
+      expect(tauriMock.calls("install_update")).toHaveLength(0);
+
+      tauriMock.ask.mockResolvedValue(true);
+      await runCommand("install novapdf 0.2.0");
+      await screen.findByText("Couldn't install the update: bad signature");
+      expect(tauriMock.calls("install_update")).toHaveLength(1);
+    });
   });
 });
 

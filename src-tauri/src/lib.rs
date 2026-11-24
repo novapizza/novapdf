@@ -157,11 +157,18 @@ pub fn run() {
             commands::save_with_dialog,
             commands::list_fonts,
             update::check_update,
+            update::download_update,
+            update::discard_update,
             update::install_update,
         ])
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
+            // An automatic update downloaded during the session installs as the
+            // app quits, after the unsaved-changes prompt has had its say.
+            if matches!(event, tauri::RunEvent::Exit) {
+                update::install_on_exit(app);
+            }
             // macOS passes no file on the command line. Finder sends an "open
             // documents" event instead, at startup and while the app runs.
             #[cfg(target_os = "macos")]
