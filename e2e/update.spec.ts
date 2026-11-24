@@ -15,3 +15,17 @@ test("Check for updates reports that a development build can't update itself", a
   await page.getByRole("textbox", { name: "Search commands" }).fill("install novapdf");
   await expect(page.getByRole("option", { name: /Install NovaPDF update/ })).toHaveAttribute("aria-disabled", "true");
 });
+
+test("automatic updates can be turned off and on from the palette", async ({ app }) => {
+  const { page } = app;
+  const run = async (command: string) => {
+    await page.keyboard.press("Control+k");
+    await page.getByRole("textbox", { name: "Search commands" }).fill(command);
+    await page.keyboard.press("Enter");
+  };
+  // On by default.
+  await run("turn off automatic updates");
+  await expect(page.getByText(/Automatic updates are off/)).toBeVisible();
+  await run("turn on automatic updates");
+  await expect(page.getByText(/Automatic updates are on/)).toBeVisible();
+});

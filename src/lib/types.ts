@@ -129,6 +129,8 @@ export interface UpdateStatus {
   available: boolean;
   version: string | null;
   notes: string | null;
+  /** Downloaded and set to install when the app quits. */
+  downloaded: boolean;
 }
 
 export const EMPTY_EDITS: PageEdits = { removedObjects: [], removedAnnots: [], blocks: [] };
