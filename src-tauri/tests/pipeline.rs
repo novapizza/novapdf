@@ -6,8 +6,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use novapdf_lib::protocol::{
-    Align, FontSpec, ImageFormat, OutputPage, PageEdits, TextBlock, Watermark,
+    Align, AnnotChange, AnnotShape, FontSpec, ImageFormat, NewAnnot, OutputPage, PageEdits, Point,
+    Rect, TextBlock, Watermark,
 };
+use novapdf_lib::worker::annots;
 use novapdf_lib::worker::edit::{self, Writer};
 use novapdf_lib::worker::extract;
 use novapdf_lib::worker::fonts::Fonts;
@@ -395,6 +397,244 @@ fn full_pipeline() {
         .measure_lines("Hello world", &helvetica(), 12.0, Some(100.0), 0.0, 1.0)
         .unwrap();
     assert!((narrow[0].width * 2.0 - wide[0].width).abs() < 0.01, "h_scale scales widths");
+
+    // ---- 16. Comments. The page has a CropBox that does not start at (0, 0), so
+    // display space is offset from page space by (100, 742).
+    let commented = comment_pdf();
+    let cdoc = Doc::load(&lib, commented.clone()).unwrap();
+    let listed = annots::list(&cdoc, 0, 5).unwrap();
+    assert_eq!(listed.len(), 1);
+    let list0 = &listed[0].annots;
+    let kinds: Vec<(u32, &str)> = list0.iter().map(|a| (a.index, a.subtype.as_str())).collect();
+    assert_eq!(kinds, [(0, "Text"), (2, "Text"), (3, "Highlight")], "popup and hidden note are not listed");
+    let note = &list0[0];
+    assert_eq!((note.contents.as_str(), note.author.as_str()), ("old", "Ann"));
+    assert_eq!(note.date, "D:20240101000000Z");
+    assert_eq!((note.popup, note.in_reply_to), (Some(1), None));
+    assert_eq!(list0[1].in_reply_to, Some(0));
+    assert!((note.rect.x - 50.0).abs() < 0.01 && (note.rect.y - 72.0).abs() < 0.01, "{:?}", note.rect);
+    assert_eq!(list0[2].color, Some([255, 255, 0]));
+    assert!(annots::list(&cdoc, 1, 1).is_err() && annots::list(&cdoc, 0, 0).is_err());
+
+    // Character boxes in display space: "Hello" starts at x 50, baseline 142.
+    let chars = annots::text_chars(&cdoc, 0).unwrap();
+    assert_eq!(String::from_utf16_lossy(&chars.codes), "Hello");
+    assert_eq!(chars.boxes.len(), 20);
+    let (hx, hy, hh) = (chars.boxes[0], chars.boxes[1], chars.boxes[3]);
+    assert!((hx - 50.0).abs() < 1.5 && hy < 142.0 && hy + hh > 142.0, "H box {:?}", &chars.boxes[..4]);
+
+    let date = "D:20261126093000+07'00'";
+    let new_annots = vec![
+        NewAnnot {
+            id: "note-1".into(),
+            shape: AnnotShape::Note { x: 60.0, y: 100.0 },
+            color: [255, 200, 0],
+            opacity: 1.0,
+            contents: "A new note".into(),
+            author: "Linh".into(),
+            date: date.into(),
+        },
+        NewAnnot {
+            id: "hl-1".into(),
+            shape: AnnotShape::Highlight { rects: vec![Rect { x: 50.0, y: 118.0, width: 60.0, height: 30.0 }] },
+            color: [255, 235, 59],
+            opacity: 0.5,
+            contents: String::new(),
+            author: String::new(),
+            date: date.into(),
+        },
+        NewAnnot {
+            id: "ink-1".into(),
+            shape: AnnotShape::Ink {
+                strokes: vec![vec![Point { x: 200.0, y: 300.0 }, Point { x: 300.0, y: 300.0 }]],
+                width: 6.0,
+            },
+            color: [0, 0, 255],
+            opacity: 1.0,
+            contents: String::new(),
+            author: String::new(),
+            date: date.into(),
+        },
+    ];
+    let comment_edits = PageEdits {
+        changed_annots: vec![AnnotChange { index: 0, contents: Some("new <text>".into()), at: None, date: date.into() }],
+        annotations: new_annots.clone(),
+        ..Default::default()
+    };
+    let mut cdocs = HashMap::new();
+    cdocs.insert(9, Doc::load(&lib, commented.clone()).unwrap());
+    let out = OutputPage { doc_id: 9, page_index: 0, rotation: 0, edits: Some(comment_edits.clone()) };
+    let saved = edit::save(&lib, &cdocs, &[out], None, true, &mut fonts).unwrap().bytes;
+    // Comment-only edits never rewrite the page content.
+    assert_eq!(page_content(&saved), page_content(&commented), "content stream must be unchanged");
+    let dicts = annot_dicts(&saved);
+    assert_eq!(dicts.len(), 8, "5 original + 3 new");
+    for (sub, nm, flags) in [("Text", "note-1", 28), ("Highlight", "hl-1", 4), ("Ink", "ink-1", 4)] {
+        let d = dicts.iter().find(|d| d.contains(&format!("/NM ({nm})"))).unwrap_or_else(|| panic!("{nm}: {dicts:?}"));
+        assert!(d.contains(&format!("/Subtype /{sub}")), "{d}");
+        assert!(d.contains("/AP"), "{nm} needs an appearance stream: {d}");
+        assert!(d.contains(&format!("/F {flags}")), "{nm} flags: {d}");
+        assert!(d.contains(&format!("/M ({date})")) && d.contains("/CreationDate"), "{d}");
+    }
+    let old = dicts.iter().find(|d| d.contains("/NM (n1)")).unwrap();
+    assert!(old.contains("new <text>") && old.contains("new &lt;text&gt;"), "contents and /RC updated: {old}");
+    assert!(old.contains("/Popup"), "changed in place keeps its popup: {old}");
+    assert!(dicts.iter().any(|d| d.contains("/IRT")), "the reply still points at the note");
+
+    let reloaded = Doc::load(&lib, saved.clone()).unwrap();
+    let relisted = &annots::list(&reloaded, 0, 1).unwrap()[0].annots;
+    let new_note = relisted.iter().find(|a| a.contents == "A new note").expect("new note listed");
+    assert_eq!((new_note.subtype.as_str(), new_note.author.as_str()), ("Text", "Linh"));
+    assert!(
+        (new_note.rect.x - 60.0).abs() < 0.01 && (new_note.rect.y - 100.0).abs() < 0.01,
+        "note lands where it was placed: {:?}",
+        new_note.rect
+    );
+    assert_eq!(relisted.iter().find(|a| a.index == 0).unwrap().contents, "new <text>");
+    // The ink stroke is drawn: blue pixels along y = 300 (display), x 200..300.
+    let png = edit::render(&lib, &reloaded, 0, 412, ImageFormat::Png, 0, None, None, &mut fonts).unwrap();
+    let img = image::load_from_memory(&png).unwrap().to_rgb8();
+    let px = img.get_pixel(250, 300).0;
+    assert!(px[2] > 150 && px[0] < 100, "ink pixel {px:?}");
+    // The same edits render through the scratch path (thumbnails).
+    let thumb = edit::render(&lib, &cdoc, 0, 412, ImageFormat::Png, 0, Some(&comment_edits), None, &mut fonts).unwrap();
+    let px = image::load_from_memory(&thumb).unwrap().to_rgb8().get_pixel(250, 300).0;
+    assert!(px[2] > 150 && px[0] < 100, "ink in a rendered thumbnail {px:?}");
+
+    // Deleting a note together with its popup and reply leaves the rest.
+    let delete = PageEdits { removed_annots: vec![0, 1, 2], ..Default::default() };
+    let out = OutputPage { doc_id: 9, page_index: 0, rotation: 0, edits: Some(delete) };
+    let pruned = annot_dicts(&edit::save(&lib, &cdocs, &[out], None, true, &mut fonts).unwrap().bytes);
+    assert_eq!(pruned.len(), 2, "{pruned:?}");
+    assert!(pruned.iter().all(|d| !d.contains("/Popup") && !d.contains("/IRT")), "{pruned:?}");
+
+    // Moving a note in the file: its rect moves (same size), its text and rich text stay.
+    let mut save_with = |edits: PageEdits| {
+        let out = OutputPage { doc_id: 9, page_index: 0, rotation: 0, edits: Some(edits) };
+        edit::save(&lib, &cdocs, &[out], None, true, &mut fonts).map(|s| s.bytes)
+    };
+    let move_to = |index: u32, x: f32, y: f32| PageEdits {
+        changed_annots: vec![AnnotChange { index, contents: None, at: Some(Point { x, y }), date: date.into() }],
+        ..Default::default()
+    };
+    let moved = save_with(move_to(0, 300.0, 400.0)).unwrap();
+    assert_eq!(page_content(&moved), page_content(&commented), "a move leaves the content alone");
+    let moved_doc = Doc::load(&lib, moved.clone()).unwrap();
+    let moved_list = annots::list(&moved_doc, 0, 1).unwrap().remove(0).annots;
+    let m = moved_list.iter().find(|a| a.index == 0).unwrap();
+    assert!((m.rect.x - 300.0).abs() < 0.01 && (m.rect.y - 400.0).abs() < 0.01, "{:?}", m.rect);
+    assert!((m.rect.width - note.rect.width).abs() < 0.01 && (m.rect.height - note.rect.height).abs() < 0.01);
+    assert_eq!(m.contents, "old", "a move keeps the text");
+    let d = annot_dicts(&moved).into_iter().find(|d| d.contains("/NM (n1)")).unwrap();
+    assert!(d.contains("/RC") && d.contains(&format!("/M ({date})")), "{d}");
+    // Highlights stay with their text; nothing goes off the page (412 × 692 here).
+    assert!(save_with(move_to(3, 10.0, 10.0)).unwrap_err().contains("Only notes"));
+    assert!(save_with(move_to(0, 400.0, 10.0)).unwrap_err().contains("outside the page"));
+    let off = PageEdits {
+        annotations: vec![NewAnnot { shape: AnnotShape::Note { x: 10.0, y: 690.0 }, ..new_annots[0].clone() }],
+        ..Default::default()
+    };
+    assert!(save_with(off).unwrap_err().contains("outside the page"));
+    let off_ink = PageEdits {
+        annotations: vec![NewAnnot {
+            shape: AnnotShape::Ink { strokes: vec![vec![Point { x: 10.0, y: 10.0 }, Point { x: 500.0, y: 10.0 }]], width: 2.0 },
+            ..new_annots[2].clone()
+        }],
+        ..Default::default()
+    };
+    assert!(save_with(off_ink).unwrap_err().contains("outside the page"));
+
+    // On a page rotated in the app, comments are placed before the rotation, so they
+    // turn with the page.
+    let out = OutputPage { doc_id: 9, page_index: 0, rotation: 90, edits: Some(comment_edits) };
+    let turned = Doc::load(&lib, edit::save(&lib, &cdocs, &[out], None, true, &mut fonts).unwrap().bytes).unwrap();
+    let turned_note = annots::list(&turned, 0, 1).unwrap().remove(0).annots;
+    let turned_note = turned_note.iter().find(|a| a.contents == "A new note").unwrap();
+    // Display space of the turned page is 692 × 412: (60, 100) maps to (692 - 100 - 20, 60).
+    assert!((turned_note.rect.x - 572.0).abs() < 0.5 && (turned_note.rect.y - 60.0).abs() < 0.5, "{:?}", turned_note.rect);
+}
+
+/// Decoded content of page 1.
+fn page_content(pdf: &[u8]) -> Vec<u8> {
+    let doc = lopdf::Document::load_mem(pdf).unwrap();
+    doc.get_page_content(doc.get_pages()[&1])
+}
+
+/// Each annotation dictionary on page 1, printed as PDF-like text.
+fn annot_dicts(pdf: &[u8]) -> Vec<String> {
+    use lopdf::Object;
+    let doc = lopdf::Document::load_mem(pdf).unwrap();
+    let page = doc.get_dictionary(doc.get_pages()[&1]).unwrap();
+    let Ok(annots) = page.get(b"Annots") else { return Vec::new() };
+    fn show(o: &Object) -> String {
+        match o {
+            Object::Name(n) => format!("/{}", String::from_utf8_lossy(n)),
+            Object::String(s, _) => {
+                let text = if s.starts_with(&[0xFE, 0xFF]) {
+                    let units: Vec<u16> = s[2..].chunks(2).map(|c| u16::from_be_bytes([c[0], *c.get(1).unwrap_or(&0)])).collect();
+                    String::from_utf16_lossy(&units)
+                } else {
+                    String::from_utf8_lossy(s).into_owned()
+                };
+                format!("({text})")
+            }
+            Object::Integer(i) => i.to_string(),
+            Object::Real(r) => r.to_string(),
+            Object::Reference(r) => format!("{} 0 R", r.0),
+            Object::Array(a) => format!("[{}]", a.iter().map(show).collect::<Vec<_>>().join(" ")),
+            Object::Dictionary(d) => {
+                let items: Vec<String> = d.iter().map(|(k, v)| format!("/{} {}", String::from_utf8_lossy(k), show(v))).collect();
+                format!("<< {} >>", items.join(" "))
+            }
+            other => format!("{other:?}"),
+        }
+    }
+    doc.dereference(annots)
+        .unwrap()
+        .1
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| show(doc.dereference(a).unwrap().1))
+        .collect()
+}
+
+/// A one-page PDF with a CropBox offset from the MediaBox, one line of text and
+/// comments: a note with rich text, its popup, a reply, a highlight and a hidden note.
+fn comment_pdf() -> Vec<u8> {
+    let content = "BT /F1 24 Tf 150 600 Td (Hello) Tj ET";
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /CropBox [100 50 512 742] \
+         /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R \
+         /Annots [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R] >>"
+            .to_string(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        "<< /Type /Annot /Subtype /Text /Rect [150 650 170 670] /Contents (old) /RC (<p>old</p>) \
+         /T (Ann) /M (D:20240101000000Z) /NM (n1) /Popup 7 0 R >>"
+            .to_string(),
+        "<< /Type /Annot /Subtype /Popup /Rect [200 600 400 700] /Parent 6 0 R >>".to_string(),
+        "<< /Type /Annot /Subtype /Text /Rect [150 650 170 670] /Contents (reply) /IRT 6 0 R >>".to_string(),
+        "<< /Type /Annot /Subtype /Highlight /Rect [150 595 230 625] \
+         /QuadPoints [150 625 230 625 150 595 230 595] /C [1 1 0] /Contents (hl) >>"
+            .to_string(),
+        "<< /Type /Annot /Subtype /Text /F 2 /Rect [300 300 320 320] /Contents (hidden) >>".to_string(),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).into_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).into_bytes());
+    for off in offsets {
+        pdf.extend(format!("{off:010} 00000 n \n").into_bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).into_bytes());
+    pdf
 }
 
 /// Subtype (and action type, for links) of each annotation on page 1, in order.

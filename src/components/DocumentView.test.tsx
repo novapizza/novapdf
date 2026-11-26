@@ -1,12 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useMemo, useReducer } from "react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { useMemo, useReducer, useState } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocumentView } from "./DocumentView";
 import { type Workspace, initialHistory, reducer } from "../state/workspace";
-import type { LooseText, PageText } from "../lib/types";
+import type { AnnotInfo, LooseText, NewAnnot, PageEdits, PageText, TextChars } from "../lib/types";
+import { EMPTY_EDITS } from "../lib/types";
+import { DEFAULT_ANNOT_STYLE, type ReadTool } from "./AnnotationLayer";
+import { clearAnnotCache } from "../lib/annotations";
+import { clearCharCache } from "../lib/textSelect";
 import { tauriMock } from "../test/tauri";
-import { JPEG_BYTES, doc, page, pageText, paragraph } from "../test/fixtures";
+import { JPEG_BYTES, annotInfo, doc, newHighlight, newNote, page, pageText, paragraph } from "../test/fixtures";
 
 // jsdom has no layout: give the scroll area a real size so pages get a sensible scale.
 const sizeProps = ["clientWidth", "clientHeight"] as const;
@@ -62,6 +66,12 @@ interface Opts {
   extract?: (args: Record<string, unknown>) => unknown;
   /** A plain document of this many pages instead of the two-page default. */
   pages?: number;
+  /** Comments in the file, per page index. */
+  annots?: Record<number, AnnotInfo[]>;
+  chars?: Record<number, TextChars>;
+  tool?: ReadTool;
+  /** Edits the pages start with, per page index. */
+  edits?: Record<number, PageEdits>;
 }
 
 function setup(opts: Opts = {}) {
@@ -72,6 +82,14 @@ function setup(opts: Opts = {}) {
   const onWatermark = vi.fn();
   const state: { ws: Workspace } = { ws: initialHistory.present };
   tauriMock.handle("render_page", () => JPEG_BYTES);
+  tauriMock.handle("list_annotations", (a) =>
+    Array.from({ length: a.count as number }, (_, i) => {
+      const pageIndex = (a.first as number) + i;
+      return { pageIndex, annots: opts.annots?.[pageIndex] ?? [], more: 0 };
+    }),
+  );
+  tauriMock.handle("text_chars", (a) => opts.chars?.[a.pageIndex as number] ?? { codes: [], boxes: [] });
+  const tool: { current: ReadTool } = { current: opts.tool ?? "hand" };
   tauriMock.handle("extract_page", opts.extract ?? ((a) => (opts.text ?? TEXT)[a.pageIndex as number]));
   tauriMock.handle("layout_text", (a) => {
     const args = a.args as { text: string; hScale?: number };
@@ -83,12 +101,18 @@ function setup(opts: Opts = {}) {
     const [h, dispatch] = useReducer(reducer, undefined, () =>
       reducer(initialHistory, {
         type: "reset",
-        pages: opts.pages
+        pages: (opts.pages
           ? Array.from({ length: opts.pages }, (_, i) => page(i ? `P${i}` : "A", docId, i))
-          : [page("A", docId, 0), page("B", docId, 1, { rotation: 90 })],
+          : [page("A", docId, 0), page("B", docId, 1, { rotation: 90 })]
+        ).map((p, i) => (opts.edits?.[i] ? { ...p, edits: opts.edits[i] } : p)),
       }),
     );
     state.ws = h.present;
+    const [readTool, setReadTool] = useState<ReadTool>(opts.tool ?? "hand");
+    tool.current = readTool;
+    setTool = setReadTool;
+    const [mode, setMode] = useState(opts.mode ?? "edit");
+    setModeOut = setMode;
     const docs = useMemo(() => new Map([[docId, doc(docId, opts.pages ?? 2)]]), []);
     return (
       <DocumentView
@@ -97,7 +121,7 @@ function setup(opts: Opts = {}) {
         links={h.present.links}
         watermark={null}
         fonts={["Helvetica", "Times"]}
-        mode={opts.mode ?? "edit"}
+        mode={mode}
         initialPageId="A"
         onCurrentPage={() => {}}
         onChangeEdits={(updates, links) => dispatch({ type: "setEdits", updates, links })}
@@ -105,12 +129,19 @@ function setup(opts: Opts = {}) {
         onRemoveEverywhere={onRemoveEverywhere}
         onWatermark={onWatermark}
         notify={notify}
+        readTool={readTool}
+        annotStyle={DEFAULT_ANNOT_STYLE}
+        onReadTool={setReadTool}
       />
     );
   }
+  let setTool: (t: ReadTool) => void = () => {};
+  let setModeOut: (m: "read" | "edit") => void = () => {};
   const utils = render(<Harness />);
   const edits = (i: number) => state.ws.pages[i].edits;
-  return { ...utils, docId, notify, onExitEdit, onRemoveEverywhere, onWatermark, state, edits };
+  const useTool = (t: ReadTool) => act(() => setTool(t));
+  const switchMode = (m: "read" | "edit") => act(async () => setModeOut(m));
+  return { ...utils, docId, notify, onExitEdit, onRemoveEverywhere, onWatermark, state, edits, tool, useTool, switchMode };
 }
 
 const surface = (n: number) => document.querySelector<HTMLElement>(`.page-surface[data-page="${n}"]`)!;
@@ -126,7 +157,7 @@ describe("DocumentView: reading", () => {
     setup({ mode: "read" });
     expect(await screen.findByAltText("Page 1")).toHaveAttribute("src", expect.stringMatching(/^blob:/));
     expect(document.querySelector(".ov-para")).toBeNull();
-    expect(screen.getByText("Read-only mode")).toBeInTheDocument();
+    expect(screen.getByText("Reading & review")).toBeInTheDocument();
     expect(tauriMock.calls("extract_page")).toHaveLength(0);
     // Read mode applies the app-level rotation.
     await waitFor(() =>
@@ -182,7 +213,7 @@ describe("DocumentView: reading", () => {
     await userEvent.click(within(strip).getByRole("tab", { name: "Outline" }));
     expect(screen.getByText("Outline not available yet")).toBeInTheDocument();
     await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
-    expect(screen.getByText("No marks yet")).toBeInTheDocument();
+    expect(await screen.findByText("No comments yet")).toBeInTheDocument();
     await userEvent.click(within(strip).getByRole("tab", { name: /Pages/ }));
     await userEvent.click(screen.getByRole("button", { name: "Toggle page thumbnails" }));
     expect(screen.queryByRole("complementary", { name: "Pages" })).not.toBeInTheDocument();
@@ -498,5 +529,278 @@ describe("DocumentView: paragraph across a page break", () => {
     await userEvent.type(size, "40");
     await act(async () => fireEvent.blur(size));
     await waitFor(() => expect(s.notify).toHaveBeenCalledWith(expect.stringContaining("That change does not fit"), "error"));
+  });
+});
+
+describe("DocumentView: comments in read view", () => {
+  afterEach(() => {
+    clearAnnotCache();
+    clearCharCache();
+  });
+
+  /** Page 1 is 612 pt wide in a 900 px view with 24 px padding. */
+  const SCALE = (900 - 48) / 612;
+  const capture = (n = 1) => surface(n).querySelector<HTMLElement>(".annot-capture")!;
+  const pointAt = (x: number, y: number) => ({ clientX: x * SCALE, clientY: y * SCALE, pointerId: 1 });
+  const drag = (from: [number, number], to: [number, number]) => {
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(...from) });
+    fireEvent.pointerMove(capture(), pointAt(...to));
+    fireEvent.pointerUp(capture(), { pointerId: 1 });
+  };
+  const HELLO: TextChars = {
+    codes: [..."Hello world"].map((c) => c.charCodeAt(0)),
+    boxes: [..."Hello world"].flatMap((_, i) => [72 + i * 10, 100, 10, 12]),
+  };
+  const charsLoaded = async () => {
+    await waitFor(() => expect(tauriMock.calls("text_chars")).toHaveLength(1));
+    await act(async () => {});
+  };
+
+  it("adds a note: click with the Note tool, type, Save; clicking away closes without adding another", async () => {
+    const s = setup({ mode: "read", pages: 1, tool: "note" });
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(110, 210) });
+    const box = screen.getByRole("textbox", { name: "Comment text" });
+    expect(box).toHaveFocus();
+    await userEvent.type(box, "Check this");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await act(async () => {});
+    const [note] = s.edits(0).annotations!;
+    expect(note).toMatchObject({ kind: "note", contents: "Check this", color: DEFAULT_ANNOT_STYLE.note, opacity: 1 });
+    expect(note.kind === "note" && note.x).toBeCloseTo(100, 0);
+    expect(note.kind === "note" && note.y).toBeCloseTo(200, 0);
+    expect(note.id).toMatch(/^nova-note-/);
+    expect(note.date).toMatch(/^D:\d{14}[+-]\d{2}'\d{2}'$/);
+    // Saved and closed.
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(s.edits(0).annotations).toHaveLength(1);
+
+    // A new note, then a click elsewhere: the typed text is kept, and no second note opens.
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(300, 300) });
+    await userEvent.type(screen.getByRole("textbox", { name: "Comment text" }), "Second");
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(400, 400) });
+    await act(async () => {});
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(s.edits(0).annotations!.map((a) => a.contents)).toEqual(["Check this", "Second"]);
+
+    // An empty new note is dropped when clicked away.
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(300, 500) });
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(400, 600) });
+    await act(async () => {});
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(s.edits(0).annotations).toHaveLength(2);
+
+    // Esc drops a note being written.
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(300, 300) });
+    await userEvent.type(screen.getByRole("textbox", { name: "Comment text" }), "x");
+    press({ key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "New note" })).toBeNull();
+    await act(async () => {});
+    expect(s.edits(0).annotations).toHaveLength(2);
+  });
+
+  it("new comments never re-render the page view; thumbnails show them", async () => {
+    const s = setup({ mode: "read", pages: 1, tool: "ink" });
+    await screen.findByAltText("Page 1");
+    const views = () => tauriMock.calls("render_page").filter((c) => (c.args as { format: string }).format === "png").length;
+    const before = views();
+    drag([100, 100], [150, 120]);
+    expect(s.edits(0).annotations).toEqual([expect.objectContaining({ kind: "ink", width: 2 })]);
+    await waitFor(() =>
+      expect(
+        tauriMock
+          .calls("render_page")
+          .map((c) => c.args as { format: string; edits: PageEdits | null })
+          .some((a) => a.format === "jpeg" && a.edits?.annotations?.length === 1),
+      ).toBe(true),
+    );
+    expect(views()).toBe(before);
+  });
+
+  it("edits a comment in the file in place, and deletes it with its popup and replies", async () => {
+    const annots = { 0: [annotInfo(0, { popup: 1 }), annotInfo(2, { inReplyTo: 0, contents: "A reply" }), annotInfo(3)] };
+    const s = setup({ mode: "read", pages: 1, annots });
+    await userEvent.click(await screen.findByTestId("file-annot-0"));
+    const box = screen.getByRole("textbox", { name: "Comment text" });
+    expect(screen.getByRole("list", { name: "Replies" })).toHaveTextContent("A reply");
+    await userEvent.type(box, " (edited)");
+    fireEvent.blur(box);
+    expect(s.edits(0).changedAnnots).toEqual([{ index: 0, contents: "Comment 0 (edited)", date: expect.stringMatching(/^D:/) }]);
+    // Typing again replaces the change rather than adding another.
+    await userEvent.type(box, "!");
+    fireEvent.blur(box);
+    expect(s.edits(0).changedAnnots).toEqual([expect.objectContaining({ contents: "Comment 0 (edited)!" })]);
+
+    act(() => box.blur());
+    press({ key: "Delete" });
+    expect(s.edits(0).removedAnnots).toEqual([0, 1, 2]);
+    expect(s.edits(0).changedAnnots).toEqual([]);
+    expect(screen.queryByTestId("file-annot-0")).toBeNull();
+    expect(screen.getByTestId("file-annot-3")).toBeInTheDocument();
+  });
+
+  it("with the Note tool on, notes reopen for editing, drag to move and nudge with the arrow keys", async () => {
+    const s = setup({
+      mode: "read",
+      pages: 1,
+      tool: "note",
+      edits: { 0: { ...EMPTY_EDITS, annotations: [newNote("n1")] } },
+      annots: { 0: [annotInfo(0)] },
+    });
+    // Clicking a note opens it instead of placing another one.
+    await userEvent.click(screen.getByTestId("annot-n1"));
+    await userEvent.type(screen.getByRole("textbox", { name: "Comment text" }), "Edited");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(s.edits(0).annotations).toEqual([expect.objectContaining({ id: "n1", contents: "Edited" })]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Drag the new note (its corner is at 50, 60).
+    const hit = screen.getByTestId("annot-n1");
+    fireEvent.pointerDown(hit, { button: 0, ...pointAt(55, 65) });
+    fireEvent.pointerMove(hit, pointAt(155, 165));
+    fireEvent.pointerUp(hit, pointAt(155, 165));
+    const n1 = s.edits(0).annotations![0] as NewAnnot & { kind: "note" };
+    expect(n1.x).toBeCloseTo(150, 1);
+    expect(n1.y).toBeCloseTo(160, 1);
+
+    // Drag the note in the file (at 100, 100): moved in place, left out of the page render.
+    const fileHit = await screen.findByTestId("file-annot-0");
+    fireEvent.pointerDown(fileHit, { button: 0, ...pointAt(105, 105) });
+    fireEvent.pointerMove(fileHit, pointAt(305, 405));
+    fireEvent.pointerUp(fileHit, pointAt(305, 405));
+    const [change] = s.edits(0).changedAnnots!;
+    expect(change.index).toBe(0);
+    expect(change.contents).toBeUndefined();
+    expect(change.at!.x).toBeCloseTo(300, 1);
+    expect(change.at!.y).toBeCloseTo(400, 1);
+    await waitFor(() =>
+      expect(
+        tauriMock
+          .calls("render_page")
+          .map((c) => c.args as { format: string; edits: PageEdits | null })
+          .some((a) => a.format === "png" && a.edits?.removedAnnots.includes(0)),
+      ).toBe(true),
+    );
+
+    // Editing its text keeps the move; the arrow keys nudge it (Shift: 10 pt).
+    await userEvent.click(screen.getByTestId("file-annot-0"));
+    const box = screen.getByRole("textbox", { name: "Comment text" });
+    await userEvent.type(box, "!");
+    act(() => box.blur());
+    expect(s.edits(0).changedAnnots).toEqual([
+      expect.objectContaining({ index: 0, contents: "Comment 0!", at: change.at }),
+    ]);
+    press({ key: "ArrowRight" });
+    press({ key: "ArrowDown", shiftKey: true });
+    const nudged = s.edits(0).changedAnnots![0];
+    expect(nudged.at!.x).toBeCloseTo(change.at!.x + 1, 1);
+    expect(nudged.at!.y).toBeCloseTo(change.at!.y + 10, 1);
+    expect(nudged.contents).toBe("Comment 0!");
+  });
+
+  it("arrow keys leave markup alone, and do nothing with no comment open", async () => {
+    const edits = { 0: { ...EMPTY_EDITS, annotations: [newHighlight("h1")] } };
+    const s = setup({ mode: "read", pages: 1, edits });
+    press({ key: "ArrowLeft" });
+    await userEvent.click(screen.getByTestId("annot-h1"));
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    press({ key: "ArrowLeft" });
+    expect(s.edits(0).annotations).toEqual([newHighlight("h1")]);
+  });
+
+  it("edits and deletes a new comment from its card", async () => {
+    const s = setup({ mode: "read", pages: 1, edits: { 0: { ...EMPTY_EDITS, annotations: [newHighlight("h1")] } } });
+    await userEvent.click(screen.getByTestId("annot-h1"));
+    const box = screen.getByRole("textbox", { name: "Comment text" });
+    await userEvent.type(box, "Key point");
+    fireEvent.blur(box);
+    expect(s.edits(0).annotations![0]).toMatchObject({ id: "h1", contents: "Key point" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete comment" }));
+    expect(s.edits(0).annotations).toEqual([]);
+  });
+
+  it("selects text to copy or highlight; Esc steps back to the hand", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const s = setup({ mode: "read", pages: 1, tool: "select", chars: { 0: HELLO } });
+    await charsLoaded();
+    drag([75, 105], [115, 105]);
+    expect(screen.getByRole("toolbar", { name: "Selected text" })).toBeInTheDocument();
+    press({ key: "c", ctrlKey: true });
+    expect(writeText).toHaveBeenCalledWith("Hello");
+    await waitFor(() => expect(s.notify).toHaveBeenCalledWith("Copied"));
+
+    press({ key: "Escape" });
+    expect(screen.queryByRole("toolbar", { name: "Selected text" })).toBeNull();
+
+    // Again, and highlight it this time.
+    drag([75, 105], [115, 105]);
+    await userEvent.click(screen.getByRole("button", { name: /Highlight/ }));
+    expect(s.edits(0).annotations).toEqual([
+      expect.objectContaining({ kind: "highlight", rects: [{ x: 72, y: 100, width: 50, height: 12 }] }),
+    ]);
+    expect(screen.getByRole("dialog", { name: "Highlight" })).toBeInTheDocument();
+    press({ key: "Escape" }); // closes the card
+    expect(screen.queryByRole("dialog")).toBeNull();
+    press({ key: "Escape" }); // back to the hand
+    expect(s.tool.current).toBe("hand");
+  });
+
+  it("copy failures are reported", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn(async () => Promise.reject(new Error("denied"))) },
+    });
+    const s = setup({ mode: "read", pages: 1, tool: "select", chars: { 0: HELLO } });
+    await charsLoaded();
+    drag([75, 105], [95, 105]);
+    await userEvent.click(screen.getByRole("button", { name: /Copy/ }));
+    await waitFor(() => expect(s.notify).toHaveBeenCalledWith("denied", "error"));
+  });
+
+  it("clicking the page with the hand closes a card", async () => {
+    setup({ mode: "read", pages: 1, edits: { 0: { ...EMPTY_EDITS, annotations: [newNote("n1")] } } });
+    await userEvent.click(screen.getByTestId("annot-n1"));
+    expect(screen.getByRole("dialog", { name: "Note" })).toBeInTheDocument();
+    fireEvent.click(surface(1));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the Marks tab lists comments and opens one", async () => {
+    const s = setup({ mode: "read", pages: 3, tool: "ink", annots: { 2: [annotInfo(0, { contents: "On page three" })] } });
+    const strip = screen.getByRole("complementary", { name: "Pages" });
+    await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
+    await userEvent.click(await screen.findByRole("button", { name: /On page three/ }));
+    expect(s.tool.current).toBe("hand");
+    expect(await screen.findByRole("dialog", { name: "Note" })).toBeInTheDocument();
+    expect(document.querySelector<HTMLElement>(".doc-scroll")!.scrollTop).toBeGreaterThan(1000);
+    // The author name typed there goes on new comments, and is remembered.
+    await userEvent.type(screen.getByRole("textbox", { name: "Your name on new comments" }), "Linh");
+    expect(localStorage.getItem("novapdf.author")).toBe("Linh");
+    localStorage.removeItem("novapdf.author");
+  });
+
+  it("switching to edit mode saves a note being written; edit mode shows comments dimmed", async () => {
+    const s = setup({ mode: "read", pages: 1, tool: "note" });
+    fireEvent.pointerDown(capture(), { button: 0, ...pointAt(100, 100) });
+    await userEvent.type(screen.getByRole("textbox", { name: "Comment text" }), "Half-written");
+    await s.switchMode("edit");
+    expect(s.edits(0).annotations).toEqual([expect.objectContaining({ kind: "note", contents: "Half-written" })]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(surface(1).querySelector(".annot-layer.dim [data-kind=note]")).not.toBeNull();
+    expect(surface(1).querySelector(".annot-capture")).toBeNull();
+    // Opening a comment from the Marks tab in edit mode only scrolls to it.
+    const strip = screen.getByRole("complementary", { name: "Pages" });
+    await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Half-written/ }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("warns when an edited paragraph sits under a highlight", async () => {
+    const hl = newHighlight("h1", { rects: [{ x: 80, y: 695, width: 50, height: 12 }] });
+    const s = setup({ edits: { 0: { ...EMPTY_EDITS, annotations: [hl] } } });
+    fireEvent.click(await paraOverlay(1));
+    await userEvent.type(editor(), " (revised)");
+    fireEvent.keyDown(editor(), { key: "Enter", ctrlKey: true });
+    expect(s.notify).toHaveBeenCalledWith(expect.stringContaining("has a highlight on it"));
   });
 });

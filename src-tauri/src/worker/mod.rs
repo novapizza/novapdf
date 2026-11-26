@@ -7,6 +7,7 @@
 //!     results leave as bytes over stdout,
 //!   * is killed and restarted by the host if it crashes, hangs or exceeds its limits.
 
+pub mod annots;
 pub mod content;
 pub mod edit;
 pub mod extract;
@@ -162,6 +163,14 @@ fn handle<'l>(
         Request::FindWatermarks { doc_id, text } => {
             let doc = docs.get(&doc_id).ok_or("Document is not open")?;
             json(extract::find_watermarks(doc, text.as_deref())?)
+        }
+        Request::Annotations { doc_id, first, count } => {
+            let doc = docs.get(&doc_id).ok_or("Document is not open")?;
+            json(annots::list(doc, first, count)?)
+        }
+        Request::TextChars { doc_id, page_index } => {
+            let doc = docs.get(&doc_id).ok_or("Document is not open")?;
+            json(annots::text_chars(doc, page_index)?)
         }
         Request::Save { pages, watermark, sanitize } => {
             let saved = edit::save(lib, docs, &pages, watermark.as_ref(), sanitize, fonts)?;

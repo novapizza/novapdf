@@ -2760,3 +2760,297 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Comments (read view) ---------- */
+
+.annot-capture {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  touch-action: none;
+}
+.annot-capture.tool-select,
+.annot-capture.tool-highlight {
+  cursor: text;
+}
+.annot-capture.tool-note {
+  cursor: copy;
+}
+.annot-capture.tool-ink {
+  cursor: crosshair;
+}
+.annot-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.annot-layer svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+/* Highlights and marker strokes darken the page under them, like ink on paper
+   (PDFium draws them the same way in the saved file). */
+.annot-layer.blend {
+  mix-blend-mode: multiply;
+  z-index: 1;
+}
+.annot-layer.dim {
+  opacity: 0.55;
+}
+.annot-layer .text-sel {
+  fill: rgba(34, 89, 191, 0.25);
+}
+.annot-hit {
+  pointer-events: auto;
+  cursor: pointer;
+  fill: transparent;
+}
+.annot-hit.file {
+  position: absolute;
+}
+.annot-hit.movable {
+  cursor: grab;
+}
+.annot-hit.movable:active {
+  cursor: grabbing;
+}
+.annot-hit:focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 1px;
+}
+/* "This highlight has a comment" badge. */
+.annot-badge path {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.75);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+.annot-badge path.lines {
+  fill: none;
+}
+.annot-hit.file:hover,
+.annot-hit:hover {
+  outline: 1px solid rgba(109, 94, 0, 0.6);
+}
+.annot-outline {
+  fill: none;
+  stroke: var(--selection);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.annot-card,
+.text-sel-bar {
+  position: absolute;
+  z-index: 6;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--on-surface);
+  background: var(--surface-lowest);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-float), 0 0 0 1px var(--ghost);
+}
+.annot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+.annot-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.annot-card-head .icon-btn {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+}
+.annot-meta {
+  color: var(--on-surface-variant);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.annot-text {
+  min-height: 64px;
+  max-height: 180px;
+  resize: vertical;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: var(--r);
+  user-select: text;
+}
+.annot-text.readonly {
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--surface-low);
+}
+.annot-replies {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--ghost);
+  max-height: 140px;
+  overflow: auto;
+}
+.annot-replies li {
+  display: flex;
+  flex-direction: column;
+  white-space: pre-wrap;
+}
+/* Floating bar for text selected in read view (not .selection-bar, the edit-mode bar). */
+.text-sel-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  white-space: nowrap;
+}
+.text-sel-bar button {
+  height: 28px;
+  padding: 0 8px;
+  gap: 4px;
+}
+
+/* Reader toolbar: colour swatches for the comment tools */
+.swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+button.swatch {
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  padding: 0;
+  border-radius: var(--r-full);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+button.swatch.on {
+  box-shadow: 0 0 0 2px var(--surface-lowest), 0 0 0 4px var(--primary);
+}
+button.tool.small {
+  height: 26px;
+  font-size: 12px;
+}
+
+/* Marks panel (comments list in the filmstrip) */
+.marks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: -12px;
+}
+.marks-author {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--on-surface-variant);
+}
+.marks-author input,
+.marks-filter {
+  height: 30px;
+  font-size: 12.5px;
+}
+.marks-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--on-surface-variant);
+}
+.marks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.marks-page {
+  margin: 6px 0 2px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+button.mark-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  padding: 8px;
+  text-align: left;
+  font-weight: 400;
+  background: var(--surface-lowest);
+  border-radius: var(--r);
+}
+button.mark-item:hover:not(:disabled) {
+  background: var(--surface-high);
+}
+button.mark-item .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--tertiary);
+}
+.mark-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mark-head {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+.mark-head span {
+  color: var(--on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mark-head .mark-unsaved {
+  color: var(--tertiary);
+}
+.mark-text {
+  font-size: 12.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.mark-meta {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+.annot-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.annot-card-actions .hint {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+.annot-card-actions button {
+  height: 28px;
+  padding: 0 12px;
+}

@@ -367,3 +367,21 @@ fn identify_uses_the_canonical_path_and_tracks_changes() {
     assert_ne!(identify(&path).unwrap().1, stamp);
     assert!(identify(&dir.path("missing.pdf")).is_none());
 }
+
+#[test]
+fn annotation_range_is_bounded() {
+    assert!(annotation_range(0, 1).is_ok());
+    assert!(annotation_range(10, crate::protocol::MAX_ANNOT_PAGES).is_ok());
+    assert!(annotation_range(-1, 1).is_err());
+    assert!(annotation_range(0, 0).is_err());
+    assert!(annotation_range(0, crate::protocol::MAX_ANNOT_PAGES + 1).is_err());
+}
+
+#[test]
+fn text_chars_from_the_worker_are_checked() {
+    use crate::protocol::TextChars;
+    let ok = TextChars { codes: vec![65], boxes: vec![1.0, 2.0, 3.0, 4.0] };
+    assert!(check_text_chars(ok).is_ok());
+    assert!(check_text_chars(TextChars { codes: vec![65], boxes: vec![1.0] }).is_err());
+    assert!(check_text_chars(TextChars { codes: vec![65], boxes: vec![f32::NAN, 0.0, 0.0, 0.0] }).is_err());
+}

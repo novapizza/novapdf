@@ -56,7 +56,7 @@ The UI thresholds are in `vitest.config.ts`. The Rust threshold is `--fail-under
 
 | Suite | Lines | Branches |
 |---|---|---|
-| UI | 94.8% | 86.8% |
+| UI | 97.2% | 89.9% |
 | Rust gated files | 83.4% | |
 
 When coverage goes up, raise the numbers. Never lower them to make a change pass.

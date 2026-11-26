@@ -17,6 +17,10 @@ function backend() {
   tauriMock.handle("close_document", () => null);
   tauriMock.handle("layout_text", () => ({ lineStarts: [0] }));
   tauriMock.handle("take_launch_files", () => []);
+  tauriMock.handle("list_annotations", (a) =>
+    Array.from({ length: a.count as number }, (_, i) => ({ pageIndex: (a.first as number) + i, annots: [], more: 0 })),
+  );
+  tauriMock.handle("text_chars", () => ({ codes: [], boxes: [] }));
 }
 const openReturns = (...docs: ReturnType<typeof doc>[]) =>
   tauriMock.handle("open_with_dialog", () => docs.map(opened));
@@ -800,11 +804,41 @@ describe("App: navigation and command palette", () => {
     expect(tauriMock.calls("save_with_dialog")).toHaveLength(0);
   });
 
-  it("read toolbar Select switches to the editor", async () => {
+  it("read toolbar: comment tools stay in read view, with colours for the drawing tools", async () => {
     render(<App />);
     await openDoc(1);
-    await userEvent.click(screen.getByRole("button", { name: /Select/ }));
-    expect(await screen.findByRole("radiogroup", { name: "Edit tool" })).toBeInTheDocument();
+    const tools = screen.getByRole("navigation", { name: "Reader tools" });
+    const tool = (name: string) => within(tools).getByRole("button", { name: new RegExp(`^${name}$`) });
+    expect(tool("Hand")).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(tool("Select"));
+    expect(tool("Select")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("radiogroup", { name: "Edit tool" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Colour" })).not.toBeInTheDocument();
+
+    await userEvent.click(tool("Highlight"));
+    const colours = screen.getByRole("radiogroup", { name: "Colour" });
+    expect(within(colours).getByRole("radio", { name: "Yellow" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(within(colours).getByRole("radio", { name: "Green" }));
+    expect(within(colours).getByRole("radio", { name: "Green" })).toHaveAttribute("aria-checked", "true");
+
+    // Ink has its own colour, and the marker uses the highlight colour.
+    await userEvent.click(tool("Ink"));
+    expect(within(screen.getByRole("radiogroup", { name: "Colour" })).getByRole("radio", { name: "Red" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Marker" }));
+    expect(screen.getByRole("button", { name: "Marker" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("radiogroup", { name: "Colour" })).getByRole("radio", { name: "Green" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await userEvent.click(tool("Note"));
+    expect(screen.queryByRole("button", { name: "Marker" })).not.toBeInTheDocument();
+
+    // Esc in the document goes back to the hand.
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(tool("Hand")).toHaveAttribute("aria-pressed", "true");
   });
 });
 

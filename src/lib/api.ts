@@ -4,9 +4,11 @@ import type {
   FontSpec,
   LayoutResult,
   OpenOutcome,
+  PageAnnots,
   PageEdits,
   PageText,
   Rotation,
+  TextChars,
   UpdateStatus,
   Watermark,
   WatermarkScan,
@@ -42,6 +44,13 @@ export const api = {
 
   findWatermarks: (docId: DocId, text: string | null) =>
     invoke<WatermarkScan>("find_watermarks", { docId, text }),
+
+  /** Comments in the file on pages `first .. first + count` (at most 50). May return
+   *  fewer pages than asked when the text is large: ask again from the next page. */
+  listAnnotations: (docId: DocId, first: number, count: number, background: boolean) =>
+    invoke<PageAnnots[]>("list_annotations", { docId, first, count, background }),
+
+  textChars: (docId: DocId, pageIndex: number) => invoke<TextChars>("text_chars", { docId, pageIndex }),
 
   saveWithDialog: (args: {
     pages: { docId: DocId; pageIndex: number; rotation: Rotation; edits: PageEdits | null }[];
