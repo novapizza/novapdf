@@ -35,6 +35,7 @@ a bump also updates the hashes.
 | Pages | Thumbnails, multi-select (Ctrl/Shift), drag to reorder, rotate (R / Shift+R), delete, merge more PDFs into the current tab, or with nothing open combine several into one new tab (*Merge PDFs*, Ctrl+Shift+O), undo/redo |
 | Edit text | Click a paragraph → edit inline. Lines are grouped into paragraphs (columns and tables are kept apart). The edited paragraph is re-typeset with wrapping and alignment |
 | Add text | Text boxes with font, size, colour, bold/italic, alignment, line height and wrap width. Drag to move |
+| Comments | In read view: highlight text, add sticky notes, draw with a pen or a see-through marker, select and copy text. Notes can be dragged, or nudged with the arrow keys (Shift for 10 pt); Tab reaches every comment and Enter opens it. A highlight that carries a comment shows a small badge. Comments already in the file open in a card where their text can be edited in place or deleted (with their popup and replies). The *Marks* tab lists every comment in the document. Written as real PDF annotations (`/Annots`), never into the page content. Edit mode shows comments but does not create them |
 | Watermark | Text watermark on every page (font, size, colour, opacity, angle), written as a real PDF object tagged `/Artifact /Watermark` |
 | Remove watermarks | Finds tagged watermark artifacts, watermark annotations, and, given the text, untagged watermark text (fragments only when rotated or transparent, so body text is never touched) |
 | Save | Builds a new PDF with PDFium. Unchanged pages are copied untouched (vector, links, annotations kept); the "Sanitize" option removes risky annotations |
@@ -52,8 +53,8 @@ edit model (JSON)           restart, doc bytes kept in RAM   stdin/   edit.rs   
                                                              stdout   watermark, sanitize, render, save
 ```
 
-* **Edits are data.** A page's edits are `{ removedObjects, removedAnnots, blocks }` (see
-  `src-tauri/src/protocol.rs`). Source documents are never modified. Rendering an edited page
+* **Edits are data.** A page's edits are `{ removedObjects, removedAnnots, blocks,
+  changedAnnots, annotations }` (see `src-tauri/src/protocol.rs`). Source documents are never modified. Rendering an edited page
   copies that page into a scratch document and applies the edits; saving does the same into
   a fresh document. Undo/redo is just UI state.
 * **Worker pool.** Worker 0 handles interactive work (page view, text extraction, save), and
@@ -127,6 +128,11 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   in half a second before it is stopped.
 * The page editor shows pages in their original orientation; the app-level rotation is
   applied on save and in thumbnails.
+* Comments: free text, shapes, replies and review status cannot be created yet. Rich text
+  (`/RC`) is never shown (only the plain `/Contents`); editing a comment that has rich text
+  replaces it with the plain text. New notes get no `/Popup` annotation (viewers create one
+  when the note is opened). A highlight stays where it was drawn when the text under it is
+  edited (the editor warns).
 
 ## Why this differs from the original spec
 

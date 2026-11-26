@@ -17,8 +17,8 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::host::{EXTRACT_TIMEOUT, Lane, Pool, RENDER_TIMEOUT, SAVE_TIMEOUT, SCAN_TIMEOUT};
 use crate::protocol::{
-    DocId, ImageFormat, LayoutArgs, LayoutResult, OutputPage, PageEdits, PageInfo, PageText,
-    Request, Watermark, WatermarkScan,
+    DocId, ImageFormat, LayoutArgs, LayoutResult, MAX_ANNOT_PAGES, OutputPage, PageAnnots,
+    PageEdits, PageInfo, PageText, Request, TextChars, Watermark, WatermarkScan,
 };
 
 const MAX_FILE_BYTES: u64 = crate::protocol::MAX_DOC_BYTES;
@@ -381,6 +381,51 @@ pub async fn find_watermarks(
         .call(Lane::Background, Request::FindWatermarks { doc_id, text }, SCAN_TIMEOUT)
         .await?;
     serde_json::from_value(v).map_err(|e| e.to_string())
+}
+
+/// Checks a page range for `list_annotations`.
+pub fn annotation_range(first: i32, count: i32) -> Result<(), String> {
+    if first < 0 || !(1..=MAX_ANNOT_PAGES).contains(&count) {
+        return Err("Page range is invalid.".into());
+    }
+    Ok(())
+}
+
+/// Comments already in the file, for a range of pages. `background` sends the request
+/// to a thumbnail worker, so a whole-document scan never blocks viewing or editing.
+#[tauri::command]
+pub async fn list_annotations(
+    state: State<'_, AppState>,
+    doc_id: DocId,
+    first: i32,
+    count: i32,
+    background: bool,
+) -> Result<Vec<PageAnnots>, String> {
+    annotation_range(first, count)?;
+    let lane = if background { Lane::Background } else { Lane::Interactive };
+    let (v, _) = state
+        .pool
+        .call(lane, Request::Annotations { doc_id, first, count }, EXTRACT_TIMEOUT)
+        .await?;
+    serde_json::from_value(v).map_err(|e| e.to_string())
+}
+
+/// Characters of a page with their boxes, for text selection and highlights.
+#[tauri::command]
+pub async fn text_chars(state: State<'_, AppState>, doc_id: DocId, page_index: i32) -> Result<TextChars, String> {
+    let (v, _) = state
+        .pool
+        .call(Lane::Interactive, Request::TextChars { doc_id, page_index }, EXTRACT_TIMEOUT)
+        .await?;
+    check_text_chars(serde_json::from_value(v).map_err(|e| e.to_string())?)
+}
+
+/// Worker output is untrusted: one box of four numbers per character, all finite.
+pub fn check_text_chars(chars: TextChars) -> Result<TextChars, String> {
+    if chars.boxes.len() != chars.codes.len() * 4 || chars.boxes.iter().any(|v| !v.is_finite()) {
+        return Err("The PDF engine returned invalid text.".into());
+    }
+    Ok(chars)
 }
 
 #[derive(Deserialize)]

@@ -221,6 +221,121 @@ fn doc_ids_per_request() {
     assert_eq!(render.doc_ids(), [4]);
     assert_eq!(Request::Extract { doc_id: 5, page_index: 1 }.doc_ids(), [5]);
     assert_eq!(Request::FindWatermarks { doc_id: 6, text: None }.doc_ids(), [6]);
+    assert_eq!(Request::Annotations { doc_id: 7, first: 0, count: 1 }.doc_ids(), [7]);
+    assert_eq!(Request::TextChars { doc_id: 8, page_index: 0 }.doc_ids(), [8]);
+}
+
+// ---------- comments ----------
+
+const DATE: &str = "D:20261126093000+07'00'";
+
+fn new_annot(shape: AnnotShape) -> NewAnnot {
+    NewAnnot {
+        id: "a1".into(),
+        shape,
+        color: [255, 235, 59],
+        opacity: 0.5,
+        contents: "Note".into(),
+        author: "Me".into(),
+        date: DATE.into(),
+    }
+}
+
+fn note() -> NewAnnot {
+    new_annot(AnnotShape::Note { x: 10.0, y: 20.0 })
+}
+
+fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
+    Rect { x, y, width, height }
+}
+
+fn ink(strokes: Vec<Vec<Point>>, width: f32) -> NewAnnot {
+    new_annot(AnnotShape::Ink { strokes, width })
+}
+
+#[test]
+fn pdf_dates() {
+    for ok in ["D:2026", "D:20261126093000Z", DATE, "D:20261126093000-05'00"] {
+        assert!(validate_pdf_date(ok).is_ok(), "{ok}");
+    }
+    for bad in ["", "D:", "D:20x6", "2026112609", "D:2026 11", "D:2026é", &format!("D:{}", "1".repeat(31))] {
+        assert!(validate_pdf_date(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn new_annotations_validate() {
+    assert!(note().validate().is_ok());
+    let hl = new_annot(AnnotShape::Highlight { rects: vec![rect(1.0, 2.0, 30.0, 12.0)] });
+    assert!(hl.validate().is_ok());
+    let pts = vec![Point { x: 1.0, y: 1.0 }, Point { x: 5.0, y: 9.0 }];
+    assert!(ink(vec![pts.clone()], 2.0).validate().is_ok());
+
+    let bad = [
+        NewAnnot { id: String::new(), ..note() },
+        NewAnnot { id: "x".repeat(129), ..note() },
+        NewAnnot { contents: "x".repeat(MAX_ANNOT_TEXT + 1), ..note() },
+        NewAnnot { author: "x".repeat(257), ..note() },
+        NewAnnot { opacity: 0.0, ..note() },
+        NewAnnot { opacity: f32::NAN, ..note() },
+        NewAnnot { date: "now".into(), ..note() },
+        new_annot(AnnotShape::Note { x: f32::INFINITY, y: 0.0 }),
+        new_annot(AnnotShape::Note { x: 0.0, y: 30_000.0 }),
+        new_annot(AnnotShape::Highlight { rects: vec![] }),
+        new_annot(AnnotShape::Highlight { rects: vec![rect(0.0, 0.0, -1.0, 5.0)] }),
+        new_annot(AnnotShape::Highlight { rects: vec![rect(0.0, f32::NAN, 1.0, 5.0)] }),
+        new_annot(AnnotShape::Highlight { rects: vec![rect(0.0, 0.0, 1.0, 1.0); 2001] }),
+        ink(vec![], 2.0),
+        ink(vec![vec![]], 2.0),
+        ink(vec![pts.clone()], 0.0),
+        ink(vec![pts.clone()], 500.0),
+        ink(vec![vec![Point { x: f32::NAN, y: 0.0 }]], 2.0),
+        ink(vec![vec![Point { x: 0.0, y: 0.0 }]; 501], 2.0),
+        ink(vec![vec![Point { x: 0.0, y: 0.0 }; 25_001]; 2], 2.0),
+    ];
+    for (i, a) in bad.iter().enumerate() {
+        assert!(a.validate().is_err(), "case {i}");
+    }
+}
+
+#[test]
+fn page_edits_validate_comments() {
+    let with = |annotations: Vec<NewAnnot>, changed: Vec<AnnotChange>| PageEdits {
+        annotations,
+        changed_annots: changed,
+        ..Default::default()
+    };
+    let change = |contents: String, date: &str| AnnotChange { index: 0, contents: Some(contents), at: None, date: date.into() };
+    let moved = |x: f32, y: f32| AnnotChange { index: 0, contents: None, at: Some(Point { x, y }), date: DATE.into() };
+    assert!(with(vec![note()], vec![change("new".into(), DATE)]).validate().is_ok());
+    // A move alone (text untouched) is fine; a non-finite or far-off position is not.
+    assert!(with(vec![], vec![moved(10.0, 20.0)]).validate().is_ok());
+    assert!(with(vec![], vec![moved(f32::NAN, 0.0)]).validate().is_err());
+    assert!(with(vec![], vec![moved(0.0, 1e9)]).validate().is_err());
+    let parsed: AnnotChange = serde_json::from_str(r#"{"index":2,"at":{"x":1,"y":2},"date":"D:2026"}"#).unwrap();
+    assert!(parsed.contents.is_none() && parsed.at == Some(Point { x: 1.0, y: 2.0 }));
+    assert!(with(vec![NewAnnot { opacity: 2.0, ..note() }], vec![]).validate().is_err());
+    assert!(with(vec![], vec![change("x".repeat(MAX_ANNOT_TEXT + 1), DATE)]).validate().is_err());
+    assert!(with(vec![], vec![change("new".into(), "bad")]).validate().is_err());
+    assert!(with(vec![note(); MAX_ANNOTS_PER_PAGE + 1], vec![]).validate().is_err());
+    assert!(with(vec![], vec![change("a".into(), DATE); MAX_ANNOTS_PER_PAGE + 1]).validate().is_err());
+    // Either list alone makes the edits non-empty.
+    assert!(!with(vec![note()], vec![]).is_empty());
+    assert!(!with(vec![], vec![change("a".into(), DATE)]).is_empty());
+}
+
+#[test]
+fn new_annotations_use_the_ui_json_shape() {
+    let v = json!({"id": "n", "kind": "ink", "strokes": [[{"x": 1, "y": 2}]], "width": 3,
+                   "color": [1, 2, 3], "date": DATE});
+    let a: NewAnnot = serde_json::from_value(v).unwrap();
+    assert!(matches!(a.shape, AnnotShape::Ink { width, .. } if width == 3.0));
+    assert_eq!((a.opacity, a.contents.as_str()), (1.0, ""), "defaults");
+    let back = serde_json::to_value(&a).unwrap();
+    assert_eq!(back["kind"], "ink");
+    // Edits from older versions of the UI have no comment fields.
+    let e: PageEdits = serde_json::from_value(json!({"removedObjects": [1]})).unwrap();
+    assert!(e.annotations.is_empty() && e.changed_annots.is_empty());
 }
 
 #[test]

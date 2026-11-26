@@ -5,9 +5,10 @@ import { cssFamily, estimateBlockBox } from "../lib/fontCss";
 import { loadPageText } from "../lib/pageText";
 import type { RenderRequest } from "../lib/api";
 import { cached, requestRender } from "../lib/renderCache";
-import type { LooseText, PageEdits, PageText, Paragraph, TextBlock, Watermark } from "../lib/types";
-import { editsAreEmpty } from "../lib/types";
+import type { LooseText, NewAnnot, PageEdits, PageText, Paragraph, TextBlock, Watermark } from "../lib/types";
+import { editsAreEmpty, viewEdits } from "../lib/types";
 import type { PageItem } from "../state/workspace";
+import { type AnnotActions, type AnnotRef, type AnnotStyle, AnnotationLayer, type ReadTool, type TextSel } from "./AnnotationLayer";
 import { thumbRequest } from "./PageGrid";
 
 /** Width of the filmstrip thumbnails, whose cached images double as placeholders. */
@@ -69,6 +70,14 @@ interface Props {
   /** Overlays are shown but do not respond (for example while a linked paragraph is edited). */
   locked: boolean;
   actions: SurfaceActions;
+  /** Comments: tools and state for read view (edit mode only draws new comments, dimmed). */
+  readTool: ReadTool;
+  annotStyle: AnnotStyle;
+  author: string;
+  annotSelected: AnnotRef | null;
+  noteDraft: NewAnnot | null;
+  textSel: TextSel | null;
+  annotActions: AnnotActions;
 }
 
 export const PageSurface = memo(function PageSurface(p: Props) {
@@ -79,6 +88,9 @@ export const PageSurface = memo(function PageSurface(p: Props) {
   const rotation = editMode ? 0 : page.rotation;
 
   // ---- page image (real PDFium output, with edits) ----
+  // Comments made in the app are drawn by the overlay, so they are left out here:
+  // adding or typing into one never re-renders the page.
+  const shown = viewEdits(edits);
   const rank = useRef(p.rank);
   rank.current = p.rank;
   const renderWidth = Math.min(4000, Math.ceil((cssW * (window.devicePixelRatio || 1)) / 200) * 200);
@@ -88,7 +100,7 @@ export const PageSurface = memo(function PageSurface(p: Props) {
     width: renderWidth,
     format: "png",
     rotation,
-    edits: editsAreEmpty(edits) ? null : edits,
+    edits: editsAreEmpty(shown) ? null : shown,
     watermark: p.watermark,
     priority: "view",
   });
@@ -101,7 +113,7 @@ export const PageSurface = memo(function PageSurface(p: Props) {
       ? cached(thumbRequest(page, STRIP_W, p.watermark))
       : undefined,
   );
-  const editsKey = JSON.stringify(edits);
+  const editsKey = JSON.stringify(shown);
   const wmKey = JSON.stringify(p.watermark);
   useEffect(() => {
     const req = viewRequest();
@@ -186,6 +198,7 @@ export const PageSurface = memo(function PageSurface(p: Props) {
       style={{ top: p.top, left: p.left, width: cssW, height: cssH }}
       data-page={p.number}
       onClick={(e) => {
+        if (!editMode) return p.annotActions.select(page.id, null);
         if (!interactive || p.editing) return;
         actions.clickEmpty(page.id, toPage(e));
       }}
@@ -196,6 +209,24 @@ export const PageSurface = memo(function PageSurface(p: Props) {
         placeholder && <img className="page-image placeholder" src={placeholder} alt="" draggable={false} />
       )}
       {rendering && <span className="spinner page-spinner" aria-label="Rendering" />}
+
+      <AnnotationLayer
+        page={page}
+        width={rotation % 180 ? p.height : p.width}
+        height={rotation % 180 ? p.width : p.height}
+        scale={scale}
+        rotation={rotation}
+        edits={edits}
+        interactive={!editMode}
+        tool={p.readTool}
+        style={p.annotStyle}
+        author={p.author}
+        selected={p.annotSelected}
+        draft={p.noteDraft}
+        textSel={p.textSel}
+        rank={p.rank}
+        actions={p.annotActions}
+      />
 
       {showParas &&
         paragraphs.map((para) => (

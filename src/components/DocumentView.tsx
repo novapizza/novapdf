@@ -14,11 +14,27 @@ import {
   splitLink,
 } from "../lib/links";
 import { loadPageText } from "../lib/pageText";
-import type { PageEdits, PageInfo, Paragraph, TextBlock, Watermark } from "../lib/types";
+import {
+  annotBounds,
+  cachedPageAnnots,
+  deletionSet,
+  isNote,
+  loadAuthor,
+  moveNote,
+  newAnnotId,
+  overlapsMarkup,
+  pdfDate,
+  saveAuthor,
+  visibleAnnots,
+} from "../lib/annotations";
+import { boxToRotated, toUnrotated } from "../lib/textSelect";
+import type { NewAnnot, PageEdits, PageInfo, Paragraph, Point, Rect, TextBlock, Watermark } from "../lib/types";
 import { EMPTY_EDITS, editsAreEmpty } from "../lib/types";
 import { type DocInfo, type PageItem, type ParagraphLink, displaySize } from "../state/workspace";
+import type { AnnotActions, AnnotRef, AnnotStyle, ReadTool, TextSel } from "./AnnotationLayer";
 import { Inspector, LinkEditor } from "./Inspector";
 import { Icon } from "./Icon";
+import { MarksPanel } from "./MarksPanel";
 import { type Editing, PageSurface, STRIP_W, type Selection, type SurfaceActions } from "./PageSurface";
 import { thumbRequest, useThumbnail, useVisible } from "./PageGrid";
 import { EmptyNote } from "./Shell";
@@ -47,6 +63,10 @@ export interface DocumentViewProps {
   /** Opens the Watermark Studio. */
   onWatermark: () => void;
   notify: (message: string, kind?: "info" | "error") => void;
+  /** Read view: the comment tool in use and its colours. */
+  readTool: ReadTool;
+  annotStyle: AnnotStyle;
+  onReadTool: (tool: ReadTool) => void;
 }
 
 interface LinkDraft {
@@ -77,6 +97,12 @@ export function DocumentView(props: DocumentViewProps) {
   const [pick, setPick] = useState<{ fromPageId: string; para: Paragraph; dir: 1 | -1 } | null>(null);
   const [draft, setDraft] = useState<LinkDraft | null>(null);
   const [showStrip, setShowStrip] = useState(true);
+  const [stripTab, setStripTab] = useState<StripTab>("pages");
+  // Comments (read view).
+  const [annotSel, setAnnotSel] = useState<{ pageId: string; ref: AnnotRef } | null>(null);
+  const [noteDraft, setNoteDraft] = useState<{ pageId: string; annot: NewAnnot } | null>(null);
+  const [textSel, setTextSel] = useState<{ pageId: string; sel: TextSel } | null>(null);
+  const [author, setAuthor] = useState(loadAuthor);
 
   // ---------- geometry ----------
 
@@ -348,6 +374,10 @@ export function DocumentView(props: DocumentViewProps) {
         blocks: empty ? edits.blocks : [...edits.blocks, d],
       });
       setSel(empty ? null : { pageId, sel: { kind: "block", id: d.id } });
+      // A highlight stays where it was drawn, not with the rewritten text.
+      if (overlapsMarkup(paragraph.bounds, edits, cachedPageAnnots(page.docId, page.pageIndex)?.annots)) {
+        props.notify("This paragraph has a highlight on it. The highlight stays where it is and may no longer match the text.");
+      }
     } else if (isNew) {
       if (empty) return;
       setPageEdits(pageId, { ...edits, blocks: [...edits.blocks, d] });
@@ -583,15 +613,152 @@ export function DocumentView(props: DocumentViewProps) {
     return map;
   }, [links, draftLink]);
 
-  // Leaving edit mode: finish what is open.
+  // Switching mode: finish what is open in the other one. (An open comment card
+  // saves its text as it closes.)
   useEffect(() => {
-    if (editMode) return;
+    if (editMode) {
+      setAnnotSel(null);
+      setNoteDraft(null);
+      setTextSel(null);
+      return;
+    }
     handlers.current.finishEditing(false);
     setDraft(null);
     setPick(null);
     setSel(null);
     setTool("select");
   }, [editMode]);
+
+  // ---------- comments (read view) ----------
+
+  const style = props.annotStyle;
+  const now = () => pdfDate(new Date());
+  /** Fills in what a tool leaves blank: a unique id, the date and the author. */
+  const stamp = (a: NewAnnot): NewAnnot => ({
+    ...a,
+    id: a.id || newAnnotId(a.kind),
+    date: a.date || now(),
+    author: a.author || author,
+  });
+  /** The file's comments on a page as the edits leave them (cached once the page was shown). */
+  const fileAnnots = (page: PageItem) =>
+    visibleAnnots(cachedPageAnnots(page.docId, page.pageIndex)?.annots ?? [], page.edits);
+
+  const addAnnot = (pageId: string, a: NewAnnot, select: boolean) => {
+    const page = pageById(pageId);
+    if (!page) return;
+    const full = stamp(a);
+    setPageEdits(pageId, { ...page.edits, annotations: [...(page.edits.annotations ?? []), full] });
+    setTextSel(null);
+    if (select) setAnnotSel({ pageId, ref: { kind: "new", id: full.id } });
+  };
+
+  const commitDraft = (pageId: string, d: NewAnnot, text: string) => {
+    // Only close the note this card belongs to: a new one may already be open.
+    if (noteDraft?.annot.id === d.id) setNoteDraft(null);
+    if (text.trim()) addAnnot(pageId, { ...d, contents: text, date: now() }, false);
+  };
+
+  const commitAnnotText = (pageId: string, ref: AnnotRef, text: string) => {
+    const page = pageById(pageId);
+    if (!page) return;
+    const edits = page.edits;
+    if (ref.kind === "new") {
+      const list = edits.annotations ?? [];
+      const a = list.find((x) => x.id === ref.id);
+      if (!a || a.contents === text) return;
+      setPageEdits(pageId, {
+        ...edits,
+        annotations: list.map((x) => (x.id === ref.id ? { ...x, contents: text, date: now() } : x)),
+      });
+      return;
+    }
+    const info = fileAnnots(page).find((x) => x.index === ref.index);
+    if (!info || info.truncated || info.contents === text) return;
+    // Keeps a move made earlier.
+    const prev = (edits.changedAnnots ?? []).find((c) => c.index === ref.index);
+    setPageEdits(pageId, {
+      ...edits,
+      changedAnnots: [
+        ...(edits.changedAnnots ?? []).filter((c) => c.index !== ref.index),
+        { ...prev, index: ref.index, contents: text, date: now() },
+      ],
+    });
+  };
+
+  /** Moves a note so its top-left corner is at `at` (display space, kept on the page). */
+  const moveAnnot = (pageId: string, ref: AnnotRef, at: Point) => {
+    const page = pageById(pageId);
+    if (!page) return;
+    const info = docs.get(page.docId)?.pages[page.pageIndex] ?? FALLBACK_SIZE;
+    const existing = cachedPageAnnots(page.docId, page.pageIndex)?.annots ?? [];
+    const next = moveNote(page.edits, ref, at, info, existing, now());
+    if (next) setPageEdits(pageId, next);
+  };
+
+  /** Arrow keys: nudges the selected note 1 pt (10 with Shift) as seen on screen. */
+  const nudgeAnnot = (key: string, big: boolean) => {
+    if (!annotSel) return false;
+    const page = pageById(annotSel.pageId);
+    if (!page) return false;
+    const ref = annotSel.ref;
+    const a =
+      ref.kind === "new"
+        ? (page.edits.annotations ?? []).find((x) => x.id === ref.id)
+        : fileAnnots(page).find((x) => x.index === ref.index);
+    if (!a || !isNote(a)) return false;
+    const pos = "rect" in a ? a.rect : annotBounds(a);
+    const step = big ? 10 : 1;
+    const [sx, sy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[key]!;
+    const info = docs.get(page.docId)?.pages[page.pageIndex] ?? FALLBACK_SIZE;
+    // A step on screen, turned back into the page's own (unrotated) space.
+    const o = toUnrotated(0, 0, page.rotation, info.width, info.height);
+    const d = toUnrotated(sx, sy, page.rotation, info.width, info.height);
+    moveAnnot(annotSel.pageId, ref, { x: pos.x + d.x - o.x, y: pos.y + d.y - o.y });
+    return true;
+  };
+
+  const removeAnnot = (pageId: string, ref: AnnotRef) => {
+    const page = pageById(pageId);
+    setAnnotSel(null);
+    if (!page) return;
+    const edits = page.edits;
+    if (ref.kind === "new") {
+      setPageEdits(pageId, { ...edits, annotations: (edits.annotations ?? []).filter((a) => a.id !== ref.id) });
+      return;
+    }
+    // The note goes with its popup and its replies, or they would be left behind.
+    const gone = deletionSet(cachedPageAnnots(page.docId, page.pageIndex)?.annots ?? [], ref.index);
+    const drop = new Set(gone);
+    setPageEdits(pageId, {
+      ...edits,
+      removedAnnots: [...new Set([...edits.removedAnnots, ...gone])],
+      changedAnnots: (edits.changedAnnots ?? []).filter((c) => !drop.has(c.index)),
+    });
+  };
+
+  const copySelection = () => {
+    const t = textSel?.sel.text;
+    if (!t) return;
+    navigator.clipboard.writeText(t).then(
+      () => props.notify("Copied"),
+      (e) => props.notify(errorMessage(e), "error"),
+    );
+  };
+
+  /** Shows a comment: scrolls its page so it is in view, and opens its card. */
+  const openAnnot = (pageId: string, ref: AnnotRef, rect: Rect) => {
+    const i = indexById.get(pageId);
+    if (i == null) return;
+    const page = pages[i];
+    const info = docs.get(page.docId)?.pages[page.pageIndex] ?? FALLBACK_SIZE;
+    const r = editMode ? rect : boxToRotated(rect, page.rotation, info.width, info.height);
+    scrollToIndex(i, Math.max(PAD / 2, vh / 3 - r.y * geo.scale));
+    if (editMode) return;
+    props.onReadTool("hand");
+    setTextSel(null);
+    setAnnotSel({ pageId, ref });
+  };
 
   // ---------- page callbacks (one stable object, so pages can be memoised) ----------
 
@@ -652,6 +819,86 @@ export function DocumentView(props: DocumentViewProps) {
   };
   const handlers = useRef(h);
   handlers.current = h;
+
+  const ah = {
+    select(pageId: string, ref: AnnotRef | null) {
+      // A new note being written is closed (its card saves what was typed).
+      if (ref) setNoteDraft(null);
+      setAnnotSel(ref ? { pageId, ref } : null);
+      setTextSel(null);
+    },
+    add: addAnnot,
+    placeNote(pageId: string, at: Point) {
+      setAnnotSel(null);
+      setTextSel(null);
+      setNoteDraft({
+        pageId,
+        annot: stamp({
+          id: "",
+          kind: "note",
+          x: at.x,
+          y: at.y,
+          color: style.note,
+          opacity: 1,
+          contents: "",
+          author,
+          date: "",
+        }),
+      });
+    },
+    selectText(pageId: string, sel: TextSel | null) {
+      setTextSel(sel ? { pageId, sel } : null);
+      if (sel) setAnnotSel(null);
+    },
+    commitText: commitAnnotText,
+    commitDraft,
+    cancel() {
+      setNoteDraft(null);
+      setAnnotSel(null);
+    },
+    dismiss() {
+      const open = !!(noteDraft || annotSel || textSel);
+      setNoteDraft(null);
+      setAnnotSel(null);
+      setTextSel(null);
+      return open;
+    },
+    remove: removeAnnot,
+    move: moveAnnot,
+    highlightSelection() {
+      if (!textSel) return;
+      const { pageId, sel: t } = textSel;
+      addAnnot(
+        pageId,
+        { id: "", kind: "highlight", rects: t.rects, color: style.highlight, opacity: 1, contents: "", author, date: "" },
+        true,
+      );
+    },
+    copySelection,
+    error(message: string) {
+      props.notify(message, "error");
+    },
+  };
+  const annotHandlers = useRef(ah);
+  annotHandlers.current = ah;
+  const annotActions = useMemo<AnnotActions>(
+    () => ({
+      select: (a, b) => annotHandlers.current.select(a, b),
+      add: (a, b, c) => annotHandlers.current.add(a, b, c),
+      placeNote: (a, b) => annotHandlers.current.placeNote(a, b),
+      selectText: (a, b) => annotHandlers.current.selectText(a, b),
+      commitText: (a, b, c) => annotHandlers.current.commitText(a, b, c),
+      commitDraft: (a, b, c) => annotHandlers.current.commitDraft(a, b, c),
+      cancel: () => annotHandlers.current.cancel(),
+      dismiss: () => annotHandlers.current.dismiss(),
+      remove: (a, b) => annotHandlers.current.remove(a, b),
+      move: (a, b, c) => annotHandlers.current.move(a, b, c),
+      highlightSelection: () => annotHandlers.current.highlightSelection(),
+      copySelection: () => annotHandlers.current.copySelection(),
+      error: (m) => annotHandlers.current.error(m),
+    }),
+    [],
+  );
   const actions = useMemo<SurfaceActions>(
     () => ({
       select: (a, b) => handlers.current.select(a, b),
@@ -690,7 +937,27 @@ export function DocumentView(props: DocumentViewProps) {
         setZoom(1);
         return;
       }
-      if (mod || e.altKey || !editMode) return;
+      if (!editMode) {
+        if (mod && e.key.toLowerCase() === "c" && textSel) {
+          e.preventDefault();
+          copySelection();
+          return;
+        }
+        if (mod || e.altKey) return;
+        if ((e.key === "Delete" || e.key === "Backspace") && annotSel) {
+          e.preventDefault();
+          removeAnnot(annotSel.pageId, annotSel.ref);
+        } else if (e.key.startsWith("Arrow") && nudgeAnnot(e.key, e.shiftKey)) {
+          e.preventDefault();
+        } else if (e.key === "Escape") {
+          if (noteDraft) setNoteDraft(null);
+          else if (textSel) setTextSel(null);
+          else if (annotSel) setAnnotSel(null);
+          else if (props.readTool !== "hand") props.onReadTool("hand");
+        }
+        return;
+      }
+      if (mod || e.altKey) return;
       if ((e.key === "Delete" || e.key === "Backspace") && sel) {
         e.preventDefault();
         deleteSelection();
@@ -721,7 +988,15 @@ export function DocumentView(props: DocumentViewProps) {
     for (let i = pageAt(scrollTop - over); i < pages.length && geo.tops[i] <= scrollTop + vh + over; i++) mounted.add(i);
   }
   // Pages with open work stay mounted even when scrolled away.
-  for (const id of [editing?.pageId, draft?.link.a.pageId, draft?.link.b.pageId, pickTargetId]) {
+  for (const id of [
+    editing?.pageId,
+    draft?.link.a.pageId,
+    draft?.link.b.pageId,
+    pickTargetId,
+    annotSel?.pageId,
+    noteDraft?.pageId,
+    textSel?.pageId,
+  ]) {
     const i = id ? indexById.get(id) : undefined;
     if (i != null) mounted.add(i);
   }
@@ -789,6 +1064,20 @@ export function DocumentView(props: DocumentViewProps) {
             current={currentIndex}
             editMode={editMode}
             onJump={(i) => scrollToIndex(i)}
+            tab={stripTab}
+            onTab={setStripTab}
+            marks={
+              <MarksPanel
+                pages={pages}
+                docs={docs}
+                author={author}
+                onAuthor={(name) => {
+                  setAuthor(name);
+                  saveAuthor(name);
+                }}
+                onOpen={openAnnot}
+              />
+            }
           />
         )}
         <div className="doc-main">
@@ -853,6 +1142,13 @@ export function DocumentView(props: DocumentViewProps) {
                   rank={rank}
                   locked={!!draft}
                   actions={actions}
+                  readTool={props.readTool}
+                  annotStyle={style}
+                  author={author}
+                  annotSelected={annotSel?.pageId === page.id ? annotSel.ref : null}
+                  noteDraft={noteDraft?.pageId === page.id ? noteDraft.annot : null}
+                  textSel={textSel?.pageId === page.id ? textSel.sel : null}
+                  annotActions={annotActions}
                 />
               );
             })}
@@ -967,7 +1263,9 @@ function PageJump(props: { current: number; count: number; onJump: (n: number) =
   );
 }
 
-/** Left pane: page thumbnails, plus outline and marks tabs (not built yet). */
+type StripTab = "pages" | "outline" | "marks";
+
+/** Left pane: page thumbnails, comments (Marks), and the outline (not built yet). */
 function Filmstrip(props: {
   pages: PageItem[];
   docs: Map<number, DocInfo>;
@@ -975,8 +1273,11 @@ function Filmstrip(props: {
   current: number;
   editMode: boolean;
   onJump: (index: number) => void;
+  tab: StripTab;
+  onTab: (tab: StripTab) => void;
+  marks: React.ReactNode;
 }) {
-  const [tab, setTab] = useState<"pages" | "outline" | "marks">("pages");
+  const { tab, onTab: setTab } = props;
   const listRef = useRef<HTMLDivElement>(null);
 
   // Keep the current page's thumbnail in view.
@@ -1024,15 +1325,13 @@ function Filmstrip(props: {
               Bookmarks and sections will show here.
             </EmptyNote>
           ) : (
-            <EmptyNote icon="note" title="No marks yet">
-              Highlights, notes and ink are coming in a later version.
-            </EmptyNote>
+            props.marks
           )}
         </div>
       )}
       <div className="strip-foot">
-        <Icon name={props.editMode ? "edit" : "lock"} size={14} />
-        {props.editMode ? "Editing" : "Read-only mode"}
+        <Icon name={props.editMode ? "edit" : "note"} size={14} />
+        {props.editMode ? "Editing" : "Reading & review"}
       </div>
     </aside>
   );

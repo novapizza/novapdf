@@ -77,6 +77,62 @@ pub struct TextBlock {
     pub continues: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// Geometry of an annotation created in the app, in display space (like `TextBlock`).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AnnotShape {
+    /// A sticky note; (x, y) is the top-left corner of its icon.
+    Note { x: f32, y: f32 },
+    /// A text highlight: one rectangle per line of text.
+    Highlight { rects: Vec<Rect> },
+    /// Free-hand strokes (pen or marker).
+    Ink { strokes: Vec<Vec<Point>>, width: f32 },
+}
+
+/// An annotation created in the app. Written into `/Annots` on render and save; the
+/// page content stream is never touched for it.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NewAnnot {
+    /// Unique id, also written as `/NM`.
+    pub id: String,
+    #[serde(flatten)]
+    pub shape: AnnotShape,
+    pub color: [u8; 3],
+    #[serde(default = "one")]
+    pub opacity: f32,
+    #[serde(default)]
+    pub contents: String,
+    #[serde(default)]
+    pub author: String,
+    /// PDF date (`D:YYYYMMDDHHmmSS+HH'mm'`), written as `/M` and `/CreationDate`.
+    pub date: String,
+}
+
+/// An in-place change to an annotation that is already in the file. Changing it in
+/// place keeps what the app does not model (appearance, replies, `/NM`, dates).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotChange {
+    /// Index on the original page.
+    pub index: u32,
+    /// New text; `None` leaves it as it is (a moved note keeps text that was cut when
+    /// listed).
+    #[serde(default)]
+    pub contents: Option<String>,
+    /// New top-left corner of a note, in display space; the size stays.
+    #[serde(default)]
+    pub at: Option<Point>,
+    /// PDF date, written as `/M`.
+    pub date: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PageEdits {
@@ -88,11 +144,21 @@ pub struct PageEdits {
     pub removed_annots: Vec<u32>,
     #[serde(default)]
     pub blocks: Vec<TextBlock>,
+    /// Changes to annotations already in the file (indices on the original page).
+    #[serde(default)]
+    pub changed_annots: Vec<AnnotChange>,
+    /// Annotations created in the app.
+    #[serde(default)]
+    pub annotations: Vec<NewAnnot>,
 }
 
 impl PageEdits {
     pub fn is_empty(&self) -> bool {
-        self.removed_objects.is_empty() && self.removed_annots.is_empty() && self.blocks.is_empty()
+        self.removed_objects.is_empty()
+            && self.removed_annots.is_empty()
+            && self.blocks.is_empty()
+            && self.changed_annots.is_empty()
+            && self.annotations.is_empty()
     }
 }
 
@@ -213,6 +279,50 @@ pub struct WatermarkScan {
     pub matching_text: u32,
 }
 
+/// An annotation already in the file, as listed for the comments overlay and panel.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotInfo {
+    /// Index on the page (the same index `removedAnnots` and `changedAnnots` use).
+    pub index: u32,
+    /// PDF subtype name, such as "Text" or "Highlight".
+    pub subtype: String,
+    /// Bounds in display space.
+    pub rect: Rect,
+    /// `/Contents` as plain text (never `/RC`), cut to `MAX_ANNOT_TEXT` characters.
+    pub contents: String,
+    /// True when `contents` was cut: the app must not write it back.
+    pub truncated: bool,
+    pub author: String,
+    /// `/M`, or `/CreationDate` when there is no `/M`, as written in the file.
+    pub date: String,
+    pub color: Option<[u8; 3]>,
+    /// Index of this annotation's `/Popup`.
+    pub popup: Option<u32>,
+    /// Index of the annotation this one replies to (`/IRT`).
+    pub in_reply_to: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageAnnots {
+    pub page_index: i32,
+    pub annots: Vec<AnnotInfo>,
+    /// Comments on the page beyond the per-page cap, not listed.
+    pub more: u32,
+}
+
+/// Characters of a page in PDFium's reading order, for text selection and highlights.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TextChars {
+    /// One UTF-16 code unit per character.
+    pub codes: Vec<u16>,
+    /// x, y, width, height per character, in display space. Zero size for characters
+    /// PDFium inserted (spaces and line breaks between text objects).
+    pub boxes: Vec<f32>,
+}
+
 // ---------- Requests / responses ----------
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -244,6 +354,11 @@ pub enum Request {
     Extract { doc_id: DocId, page_index: i32 },
     #[serde(rename_all = "camelCase")]
     FindWatermarks { doc_id: DocId, text: Option<String> },
+    /// Comments on pages `first .. first + count` (at most `MAX_ANNOT_PAGES`).
+    #[serde(rename_all = "camelCase")]
+    Annotations { doc_id: DocId, first: i32, count: i32 },
+    #[serde(rename_all = "camelCase")]
+    TextChars { doc_id: DocId, page_index: i32 },
     Save {
         pages: Vec<OutputPage>,
         watermark: Option<Watermark>,
@@ -299,7 +414,9 @@ impl Request {
             | Request::Layout(_) => vec![],
             Request::Render { doc_id, .. }
             | Request::Extract { doc_id, .. }
-            | Request::FindWatermarks { doc_id, .. } => vec![*doc_id],
+            | Request::FindWatermarks { doc_id, .. }
+            | Request::Annotations { doc_id, .. }
+            | Request::TextChars { doc_id, .. } => vec![*doc_id],
             Request::Save { pages, .. } => {
                 let mut ids: Vec<DocId> = pages.iter().map(|p| p.doc_id).collect();
                 ids.sort_unstable();
@@ -429,7 +546,84 @@ impl PageEdits {
             }
             validate_font(&b.font)?;
         }
+        if self.annotations.len() > MAX_ANNOTS_PER_PAGE || self.changed_annots.len() > MAX_ANNOTS_PER_PAGE {
+            return Err("Too many comments on one page".into());
+        }
+        for a in &self.annotations {
+            a.validate()?;
+        }
+        for c in &self.changed_annots {
+            if c.contents.as_ref().is_some_and(|t| t.chars().count() > MAX_ANNOT_TEXT) {
+                return Err("Comment text is too long".into());
+            }
+            if c.at.is_some_and(|p| !coord_ok(p.x) || !coord_ok(p.y)) {
+                return Err("Comment has invalid geometry".into());
+            }
+            validate_pdf_date(&c.date)?;
+        }
         Ok(())
+    }
+}
+
+/// Most comments created or changed on one page, and listed per page.
+pub const MAX_ANNOTS_PER_PAGE: usize = 1000;
+/// Longest comment text, in characters.
+pub const MAX_ANNOT_TEXT: usize = 20_000;
+/// Most pages listed by one `Annotations` request.
+pub const MAX_ANNOT_PAGES: i32 = 50;
+const MAX_HIGHLIGHT_RECTS: usize = 2000;
+const MAX_INK_STROKES: usize = 500;
+const MAX_INK_POINTS: usize = 50_000;
+
+fn coord_ok(v: f32) -> bool {
+    finite_in(v, -20_000.0, 20_000.0)
+}
+
+/// Accepts `D:YYYYMMDDHHmmSS` with an optional `Z` or `±HH'mm'` offset.
+pub fn validate_pdf_date(d: &str) -> Result<(), String> {
+    // Bytes, not str slices: a non-ASCII input must be rejected, not panic.
+    let b = d.as_bytes();
+    let ok = (6..=32).contains(&b.len())
+        && b.starts_with(b"D:")
+        && b[2..6].iter().all(u8::is_ascii_digit)
+        && b[2..].iter().all(|&c| c.is_ascii_digit() || matches!(c, b'+' | b'-' | b'Z' | b'\''));
+    if ok { Ok(()) } else { Err("Comment date is not a PDF date".into()) }
+}
+
+impl NewAnnot {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.is_empty() || self.id.len() > 128 {
+            return Err("Comment id is invalid".into());
+        }
+        if self.contents.chars().count() > MAX_ANNOT_TEXT || self.author.chars().count() > 256 {
+            return Err("Comment text is too long".into());
+        }
+        if !finite_in(self.opacity, 0.05, 1.0) {
+            return Err("Comment opacity is out of range".into());
+        }
+        validate_pdf_date(&self.date)?;
+        let geometry_ok = match &self.shape {
+            AnnotShape::Note { x, y } => coord_ok(*x) && coord_ok(*y),
+            AnnotShape::Highlight { rects } => {
+                !rects.is_empty()
+                    && rects.len() <= MAX_HIGHLIGHT_RECTS
+                    && rects.iter().all(|r| {
+                        coord_ok(r.x)
+                            && coord_ok(r.y)
+                            && finite_in(r.width, 0.0, 20_000.0)
+                            && finite_in(r.height, 0.0, 20_000.0)
+                    })
+            }
+            AnnotShape::Ink { strokes, width } => {
+                finite_in(*width, 0.1, 200.0)
+                    && !strokes.is_empty()
+                    && strokes.len() <= MAX_INK_STROKES
+                    && strokes.iter().all(|s| !s.is_empty())
+                    && strokes.iter().map(Vec::len).sum::<usize>() <= MAX_INK_POINTS
+                    && strokes.iter().flatten().all(|p| coord_ok(p.x) && coord_ok(p.y))
+            }
+        };
+        if geometry_ok { Ok(()) } else { Err("Comment has invalid geometry".into()) }
     }
 }
 

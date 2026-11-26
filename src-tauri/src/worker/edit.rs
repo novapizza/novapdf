@@ -13,6 +13,7 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder};
 use pdfium_render::prelude::{FPDF_FONT, FPDF_PAGEOBJECT, FS_MATRIX};
 
+use super::annots;
 use super::content;
 use super::fonts::{FontSource, Fonts};
 use super::pdf::{
@@ -252,6 +253,10 @@ impl<'a, 'l> Writer<'a, 'l> {
         let display = page.display_matrix();
         let inv = display.invert().ok_or("Page has an invalid size")?;
 
+        // Comments first: their indices refer to the original page, before removals.
+        let shown = page.display_size();
+        annots::apply_changes(page, &display, shown, &edits.changed_annots)?;
+
         // Collect handles first: removing shifts the indices of later objects.
         let count = page.object_count().max(0) as u32;
         let mut indices: Vec<u32> = edits.removed_objects.iter().copied().filter(|&i| i < count).collect();
@@ -274,6 +279,9 @@ impl<'a, 'l> Writer<'a, 'l> {
         for i in annots {
             unsafe { b.FPDFPage_RemoveAnnot(page.h, i as c_int) };
         }
+        // Annotations live in /Annots, not in the content stream, so they never make
+        // the page content need regenerating.
+        annots::add(page, &inv, shown, &edits.annotations)?;
 
         for block in &edits.blocks {
             self.draw_block(page, &inv, block)?;
@@ -646,6 +654,9 @@ fn build(
             }
             if sanitize {
                 sanitize_page(&out, &page);
+            }
+            if edits.is_some_and(|e| !e.annotations.is_empty()) {
+                page.generate_annot_appearances()?;
             }
             if changed {
                 page.generate_content()?;

@@ -83,6 +83,66 @@ fn sample_pdf() -> Vec<u8> {
     pdf
 }
 
+/// A PDF whose pages each hold the given annotation dictionaries (inline in `/Annots`).
+fn pdf_with_annots(pages: &[Vec<String>]) -> Vec<u8> {
+    let kids: Vec<String> = (0..pages.len()).map(|i| format!("{} 0 R", i + 3)).collect();
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), pages.len()),
+    ];
+    for annots in pages {
+        objects.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [{}] >>", annots.join(" ")));
+    }
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).into_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).into_bytes());
+    for off in offsets {
+        pdf.extend(format!("{off:010} 00000 n \n").into_bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).into_bytes());
+    pdf
+}
+
+/// A hostile file cannot make the comment list huge: comments per page, text per
+/// comment, text per page and text per request are all capped.
+#[test]
+fn comment_listing_is_capped_on_a_hostile_file() {
+    let note = |text: &str| format!("<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents ({text}) >>");
+    let big = "x".repeat(20_000);
+    // Page 1: 600 notes, the first with 30 000 characters of text.
+    let mut many = vec![note(&"y".repeat(30_000))];
+    many.extend((1..600).map(|_| note("")));
+    // Pages 2–4: 300 notes of 20 000 characters each (6 MB of text per page).
+    let heavy: Vec<String> = (0..300).map(|_| note(&big)).collect();
+    let pdf = pdf_with_annots(&[many, heavy.clone(), heavy.clone(), heavy]);
+
+    let mut w = Worker::start();
+    w.ok(json!({"op": "open", "docId": 1}), &pdf);
+    let (list, _) = w.ok(json!({"op": "annotations", "docId": 1, "first": 0, "count": 4}), &[]);
+    let pages = list.as_array().unwrap();
+
+    let first = &pages[0];
+    assert_eq!(first["annots"].as_array().unwrap().len(), 500, "at most 500 listed per page");
+    assert_eq!(first["more"], 100, "the rest are counted, not listed");
+    let long = &first["annots"][0];
+    assert_eq!(long["contents"].as_str().unwrap().chars().count(), 20_000);
+    assert_eq!(long["truncated"], true);
+
+    // 4 MB of text per page: 210 of the 300 heavy notes fit, the other 90 are counted.
+    let second = &pages[1];
+    assert_eq!(second["annots"].as_array().unwrap().len(), 210);
+    assert_eq!(second["more"], 90);
+    // 8 MB per request: the list stops after page 3; the caller asks again for page 4.
+    assert_eq!(pages.len(), 3, "stops early at the request budget");
+    let (rest, _) = w.ok(json!({"op": "annotations", "docId": 1, "first": 3, "count": 1}), &[]);
+    assert_eq!(rest[0]["pageIndex"], 3);
+}
+
 fn helvetica() -> Value {
     json!({"family": "Helvetica", "bold": false, "italic": false})
 }
@@ -124,6 +184,30 @@ fn worker_speaks_the_frame_protocol() {
 
     let (scan, _) = w.ok(json!({"op": "findWatermarks", "docId": 1, "text": null}), &[]);
     assert_eq!(scan, json!({"pages": [], "markedObjects": 0, "annotations": 0, "matchingText": 0}));
+
+    // Comments: none in the file; a render with a new note draws it; text characters.
+    let (list, _) = w.ok(json!({"op": "annotations", "docId": 1, "first": 0, "count": 5}), &[]);
+    assert_eq!(list, json!([{"pageIndex": 0, "annots": [], "more": 0}]));
+    assert!(!w.err(json!({"op": "annotations", "docId": 1, "first": 3, "count": 1}), &[]).is_empty());
+    let note = json!({"id": "n1", "kind": "note", "x": 300, "y": 300, "color": [255, 200, 0],
+                      "opacity": 1, "contents": "Hi", "author": "", "date": "D:20261126000000Z"});
+    let edits = json!({"annotations": [note]});
+    let (_, png) = w.ok(
+        json!({"op": "render", "docId": 1, "pageIndex": 0, "width": 200, "format": "png",
+               "edits": edits, "watermark": null}),
+        &[],
+    );
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let bad = json!({"annotations": [{"id": "n2", "kind": "note", "x": 0, "y": 0, "color": [0, 0, 0],
+                                      "date": "yesterday"}]});
+    assert!(w
+        .err(json!({"op": "render", "docId": 1, "pageIndex": 0, "width": 200, "format": "png",
+                    "edits": bad, "watermark": null}), &[])
+        .contains("PDF date"));
+    let (chars, _) = w.ok(json!({"op": "textChars", "docId": 1, "pageIndex": 0}), &[]);
+    let codes: Vec<u16> = chars["codes"].as_array().unwrap().iter().map(|c| c.as_u64().unwrap() as u16).collect();
+    assert!(String::from_utf16_lossy(&codes).starts_with("Hello worker"), "{chars}");
+    assert_eq!(chars["boxes"].as_array().unwrap().len(), codes.len() * 4);
 
     let (r, saved) = w.ok(
         json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0, "rotation": 90}],

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -16,6 +16,14 @@ import {
 import { type Tab, activeTab, initialTabs, isDirty, neighbourTab, referencedDocs, tabsReducer } from "./state/tabs";
 import { PageGrid } from "./components/PageGrid";
 import { DocumentView } from "./components/DocumentView";
+import {
+  type AnnotStyle,
+  DEFAULT_ANNOT_STYLE,
+  READ_TOOLS,
+  type ReadTool,
+  SWATCHES,
+  styleSlot,
+} from "./components/AnnotationLayer";
 import { WatermarkDialog } from "./components/WatermarkDialog";
 import { CleanDialog, type ScanResult } from "./components/CleanDialog";
 import { Toasts, type Toast } from "./components/Toasts";
@@ -57,6 +65,8 @@ export default function App() {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
   const [section, setSection] = useState<Section>("library");
+  const [readTool, setReadTool] = useState<ReadTool>("hand");
+  const [annotStyle, setAnnotStyle] = useState<AnnotStyle>(DEFAULT_ANNOT_STYLE);
   const docMode = section === "read" || section === "edit" ? section : null;
   const [thumbWidth, setThumbWidth] = useState(170);
   const [sanitize, setSanitize] = useState(true);
@@ -603,22 +613,49 @@ export default function App() {
 
         {hasDoc && section === "read" && (
           <nav className="toolbar" aria-label="Reader tools">
-            <button className="tool active" aria-pressed="true" title="Scroll and read">
-              <Icon name="hand" /> Hand
-            </button>
-            <button className="tool" onClick={() => navigate("edit")} title="Select and edit text">
-              <Icon name="pointer" /> Select
-            </button>
-            <div className="sep" />
-            <button className="tool gold" disabled title="Coming soon">
-              <Icon name="highlighter" /> Highlight
-            </button>
-            <button className="tool gold" disabled title="Coming soon">
-              <Icon name="note" /> Note
-            </button>
-            <button className="tool gold" disabled title="Coming soon">
-              <Icon name="ink" /> Ink
-            </button>
+            {READ_TOOLS.map((t, i) => (
+              <Fragment key={t.key}>
+                {i === 2 && <div className="sep" />}
+                <button
+                  className={`tool${t.gold ? " gold" : ""}${readTool === t.key ? " active" : ""}`}
+                  aria-pressed={readTool === t.key}
+                  onClick={() => setReadTool(t.key)}
+                  title={t.title}
+                >
+                  <Icon name={t.icon} /> {t.label}
+                </button>
+              </Fragment>
+            ))}
+            {(readTool === "highlight" || readTool === "note" || readTool === "ink") && (
+              <span className="swatches" role="radiogroup" aria-label="Colour">
+                {readTool === "ink" && (
+                  <button
+                    className={`tool small${annotStyle.marker ? " active" : ""}`}
+                    aria-pressed={annotStyle.marker}
+                    onClick={() => setAnnotStyle({ ...annotStyle, marker: !annotStyle.marker })}
+                    title="Draw a wide, see-through marker line instead of a pen line"
+                  >
+                    Marker
+                  </button>
+                )}
+                {SWATCHES.map((c) => {
+                  const slot = styleSlot(readTool, annotStyle.marker);
+                  const on = annotStyle[slot].join() === c.rgb.join();
+                  return (
+                    <button
+                      key={c.name}
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={c.name}
+                      title={c.name}
+                      className={`swatch${on ? " on" : ""}`}
+                      style={{ background: `rgb(${c.rgb.join(",")})` }}
+                      onClick={() => setAnnotStyle({ ...annotStyle, [slot]: c.rgb })}
+                    />
+                  );
+                })}
+              </span>
+            )}
             <div className="sep" />
             <button className="tool" onClick={() => navigate("edit")} title="Add or change text in the Advanced Editor">
               <Icon name="type" /> Add Text
@@ -692,6 +729,9 @@ export default function App() {
           ) : docMode ? (
             <DocumentView
               key={tabId}
+              readTool={readTool}
+              annotStyle={annotStyle}
+              onReadTool={setReadTool}
               pages={ws.pages}
               docs={docs}
               links={ws.links}

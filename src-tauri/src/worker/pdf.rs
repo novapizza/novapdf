@@ -253,15 +253,26 @@ impl<'d> Page<'d> {
     /// Matrix from page space (PDF points, y up) to display space (points, origin at
     /// the top-left of the page as shown, y down).
     pub fn display_matrix(&self) -> Matrix {
+        let (l, b, rt, t) = self.visible_box();
+        Matrix::page_to_display(l, b, rt, t, self.rotation())
+    }
+
+    /// Size of the page as shown, in display-space points (width, height).
+    pub fn display_size(&self) -> (f32, f32) {
+        let (l, b, rt, t) = self.visible_box();
+        if self.rotation() % 2 == 1 { (t - b, rt - l) } else { (rt - l, t - b) }
+    }
+
+    /// The visible box (left, bottom, right, top) in page space.
+    fn visible_box(&self) -> (f32, f32, f32, f32) {
         let mut r = FS_RECTF { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
         let ok = unsafe { self.b().FPDF_GetPageBoundingBox(self.h, &mut r) };
-        let (l, b, rt, t) = if ok != 0 {
+        if ok != 0 {
             (r.left.min(r.right), r.bottom.min(r.top), r.left.max(r.right), r.bottom.max(r.top))
         } else {
             let (w, h) = self.size();
             (0.0, 0.0, w, h)
-        };
-        Matrix::page_to_display(l, b, rt, t, self.rotation())
+        }
     }
 
     pub fn object_count(&self) -> i32 {
@@ -313,6 +324,13 @@ impl<'d> Page<'d> {
             self.b().FPDFBitmap_Destroy(bmp);
         }
         Ok(buf)
+    }
+
+    /// Makes PDFium write appearance streams (`/AP`) for annotations that have none,
+    /// such as the ones the app creates. PDFium generates them while building the
+    /// page's annotation list for rendering, so a 1×1 render is enough.
+    pub fn generate_annot_appearances(&self) -> Result<(), String> {
+        self.render_rgba(1, 1, 0).map(|_| ())
     }
 
     pub fn generate_content(&self) -> Result<(), String> {

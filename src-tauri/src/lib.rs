@@ -153,6 +153,8 @@ pub fn run() {
             commands::render_page,
             commands::extract_page,
             commands::find_watermarks,
+            commands::list_annotations,
+            commands::text_chars,
             commands::layout_text,
             commands::save_with_dialog,
             commands::list_fonts,
