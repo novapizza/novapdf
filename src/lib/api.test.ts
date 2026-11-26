@@ -18,7 +18,7 @@ const req = (extra: Partial<RenderRequest> = {}): RenderRequest => ({
 
 describe("api", () => {
   it("passes command names and argument names the Rust side expects", async () => {
-    for (const cmd of ["open_with_dialog", "open_dropped", "take_launch_files", "close_document", "extract_page", "find_watermarks", "save_with_dialog", "layout_text", "list_fonts", "check_update", "download_update", "discard_update", "install_update"]) {
+    for (const cmd of ["open_with_dialog", "open_dropped", "take_launch_files", "close_document", "extract_page", "find_watermarks", "save_with_dialog", "layout_text", "list_fonts", "get_outline", "check_update", "download_update", "discard_update", "install_update"]) {
       tauriMock.handle(cmd, () => "ok");
     }
     await api.openWithDialog();
@@ -28,6 +28,7 @@ describe("api", () => {
     await api.extractPage(3, 4);
     await api.findWatermarks(3, "DRAFT");
     await api.listFonts();
+    await api.outline(3);
     const font = { family: "Helvetica", bold: false, italic: false };
     await api.layoutText({ text: "hi", font, size: 12, width: 100 });
     const save = { pages: [], watermark: null, sanitize: true, suggestedName: "x.pdf" };
@@ -45,6 +46,7 @@ describe("api", () => {
     expect(tauriMock.calls("take_launch_files")).toEqual([{}]);
     expect(tauriMock.calls("close_document")).toEqual([{ docId: 3 }]);
     expect(tauriMock.calls("extract_page")).toEqual([{ docId: 3, pageIndex: 4 }]);
+    expect(tauriMock.calls("get_outline")).toEqual([{ docId: 3 }]);
     expect(tauriMock.calls("find_watermarks")).toEqual([{ docId: 3, text: "DRAFT" }]);
     expect(tauriMock.calls("layout_text")).toEqual([{ args: { text: "hi", font, size: 12, width: 100 } }]);
     expect(tauriMock.calls("save_with_dialog")).toEqual([{ args: save }]);

@@ -155,6 +155,7 @@ pub fn run() {
             commands::find_watermarks,
             commands::list_annotations,
             commands::text_chars,
+            commands::get_outline,
             commands::layout_text,
             commands::save_with_dialog,
             commands::list_fonts,

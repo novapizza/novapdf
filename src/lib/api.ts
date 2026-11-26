@@ -4,6 +4,7 @@ import type {
   FontSpec,
   LayoutResult,
   OpenOutcome,
+  Outline,
   PageAnnots,
   PageEdits,
   PageText,
@@ -51,6 +52,9 @@ export const api = {
     invoke<PageAnnots[]>("list_annotations", { docId, first, count, background }),
 
   textChars: (docId: DocId, pageIndex: number) => invoke<TextChars>("text_chars", { docId, pageIndex }),
+
+  /** The document's bookmarks, flat in document order (read on a thumbnail worker). */
+  outline: (docId: DocId) => invoke<Outline>("get_outline", { docId }),
 
   saveWithDialog: (args: {
     pages: { docId: DocId; pageIndex: number; rotation: Rotation; edits: PageEdits | null }[];

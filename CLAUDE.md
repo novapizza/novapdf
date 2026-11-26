@@ -55,6 +55,7 @@ There are three tiers. One executable is both the app and the worker: `main.rs` 
    - `content.rs` handles page-object and content handling
    - `fonts.rs` picks fonts: standard-14 if the text is WinAnsi and the family matches, otherwise an installed TrueType font embedded in full
    - `annots.rs` handles comments (annotations): lists the ones in a file, returns character boxes for text selection, changes existing ones in place and creates new ones (notes, highlights, ink)
+   - `outline.rs` lists the bookmarks, flat in document order with a depth each. The walk is iterative and bounded (entries, depth, loops), and loads at most `MAX_POSITIONED_PAGES` pages to place bookmarks on their page
 
    The worker never touches the file system for documents.
 

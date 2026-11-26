@@ -223,6 +223,7 @@ fn doc_ids_per_request() {
     assert_eq!(Request::FindWatermarks { doc_id: 6, text: None }.doc_ids(), [6]);
     assert_eq!(Request::Annotations { doc_id: 7, first: 0, count: 1 }.doc_ids(), [7]);
     assert_eq!(Request::TextChars { doc_id: 8, page_index: 0 }.doc_ids(), [8]);
+    assert_eq!(Request::Outline { doc_id: 9 }.doc_ids(), [9]);
 }
 
 // ---------- comments ----------
@@ -684,4 +685,36 @@ fn response_tag_is_status() {
     // The worker's hard-coded fallback header must parse as a Response.
     let fallback: Response = serde_json::from_slice(b"{\"status\":\"err\",\"message\":\"encode\"}").unwrap();
     assert!(matches!(fallback, Response::Err { message } if message == "encode"));
+}
+
+// ---------- Outline ----------
+
+fn outline_item(depth: u32) -> OutlineItem {
+    OutlineItem { title: "Intro".into(), depth, page_index: Some(0), y: Some(10.0), open: true }
+}
+
+#[test]
+fn outline_validate() {
+    let ok = Outline { items: vec![outline_item(0), outline_item(MAX_OUTLINE_DEPTH)], truncated: false };
+    assert!(ok.validate().is_ok());
+    assert!(Outline::default().validate().is_ok());
+    let bad = |it: OutlineItem| Outline { items: vec![it], truncated: false }.validate().is_err();
+    assert!(bad(outline_item(MAX_OUTLINE_DEPTH + 1)));
+    assert!(bad(OutlineItem { title: "x".repeat(MAX_OUTLINE_TITLE + 1), ..outline_item(0) }));
+    assert!(bad(OutlineItem { page_index: Some(-1), ..outline_item(0) }));
+    assert!(bad(OutlineItem { y: Some(f32::NAN), ..outline_item(0) }));
+    assert!(bad(OutlineItem { y: Some(1e9), ..outline_item(0) }));
+    // A title at the limit counts characters, not bytes.
+    assert!(!bad(OutlineItem { title: "ệ".repeat(MAX_OUTLINE_TITLE), page_index: None, y: None, ..outline_item(0) }));
+    let many = Outline { items: vec![outline_item(0); MAX_OUTLINE_ITEMS + 1], truncated: true };
+    assert!(many.validate().is_err());
+}
+
+#[test]
+fn outline_uses_the_ui_json_shape() {
+    let v = serde_json::to_value(Outline { items: vec![outline_item(1)], truncated: true }).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({ "items": [{ "title": "Intro", "depth": 1, "pageIndex": 0, "y": 10.0, "open": true }], "truncated": true })
+    );
 }

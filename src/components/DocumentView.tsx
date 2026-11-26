@@ -35,9 +35,9 @@ import type { AnnotActions, AnnotRef, AnnotStyle, ReadTool, TextSel } from "./An
 import { Inspector, LinkEditor } from "./Inspector";
 import { Icon } from "./Icon";
 import { MarksPanel } from "./MarksPanel";
+import { OutlinePanel } from "./OutlinePanel";
 import { type Editing, PageSurface, STRIP_W, type Selection, type SurfaceActions } from "./PageSurface";
 import { thumbRequest, useThumbnail, useVisible } from "./PageGrid";
-import { EmptyNote } from "./Shell";
 
 const PAD = 24;
 const GAP = 16;
@@ -760,6 +760,20 @@ export function DocumentView(props: DocumentViewProps) {
     setAnnotSel({ pageId, ref });
   };
 
+  /** Goes to a bookmark: its page, with `y` (display space of the page) near the top. */
+  const jumpTo = (i: number, y: number | null) => {
+    const page = pages[i];
+    if (!page) return;
+    const info = docs.get(page.docId)?.pages[page.pageIndex] ?? FALLBACK_SIZE;
+    // Read view turns the page; turned a quarter, the bookmark's y is across the page,
+    // so it goes to the top. Edit view shows pages unturned.
+    let r = y;
+    if (r != null && !editMode && page.rotation !== 0) {
+      r = page.rotation === 180 ? info.height - r : null;
+    }
+    scrollToIndex(i, r == null ? PAD / 2 : PAD / 2 - r * geo.scale);
+  };
+
   // ---------- page callbacks (one stable object, so pages can be memoised) ----------
 
   const h = {
@@ -1066,6 +1080,7 @@ export function DocumentView(props: DocumentViewProps) {
             onJump={(i) => scrollToIndex(i)}
             tab={stripTab}
             onTab={setStripTab}
+            outline={<OutlinePanel pages={pages} docs={docs} current={currentIndex} onJump={jumpTo} />}
             marks={
               <MarksPanel
                 pages={pages}
@@ -1265,7 +1280,7 @@ function PageJump(props: { current: number; count: number; onJump: (n: number) =
 
 type StripTab = "pages" | "outline" | "marks";
 
-/** Left pane: page thumbnails, comments (Marks), and the outline (not built yet). */
+/** Left pane: page thumbnails, the outline (bookmarks) and comments (Marks). */
 function Filmstrip(props: {
   pages: PageItem[];
   docs: Map<number, DocInfo>;
@@ -1275,6 +1290,7 @@ function Filmstrip(props: {
   onJump: (index: number) => void;
   tab: StripTab;
   onTab: (tab: StripTab) => void;
+  outline: React.ReactNode;
   marks: React.ReactNode;
 }) {
   const { tab, onTab: setTab } = props;
@@ -1320,13 +1336,7 @@ function Filmstrip(props: {
         </div>
       ) : (
         <div className="film-list">
-          {tab === "outline" ? (
-            <EmptyNote icon="bookmark" title="Outline not available yet">
-              Bookmarks and sections will show here.
-            </EmptyNote>
-          ) : (
-            props.marks
-          )}
+          {tab === "outline" ? props.outline : props.marks}
         </div>
       )}
       <div className="strip-foot">

@@ -36,6 +36,7 @@ a bump also updates the hashes.
 | Edit text | Click a paragraph → edit inline. Lines are grouped into paragraphs (columns and tables are kept apart). The edited paragraph is re-typeset with wrapping and alignment |
 | Add text | Text boxes with font, size, colour, bold/italic, alignment, line height and wrap width. Drag to move |
 | Comments | In read view: highlight text, add sticky notes, draw with a pen or a see-through marker, select and copy text. Notes can be dragged, or nudged with the arrow keys (Shift for 10 pt); Tab reaches every comment and Enter opens it. A highlight that carries a comment shows a small badge. Comments already in the file open in a card where their text can be edited in place or deleted (with their popup and replies). The *Marks* tab lists every comment in the document. Written as real PDF annotations (`/Annots`), never into the page content. Edit mode shows comments but does not create them |
+| Outline | The *Outline* tab shows the file's bookmarks as a tree, collapsed where the file says. Clicking one goes to its page and the spot on it; the entry for the section being read is marked. Bookmarks follow pages that were moved, and are greyed out for pages that were removed. With merged files, each file's outline is listed under its name |
 | Watermark | Text watermark on every page (font, size, colour, opacity, angle), written as a real PDF object tagged `/Artifact /Watermark` |
 | Remove watermarks | Finds tagged watermark artifacts, watermark annotations, and, given the text, untagged watermark text (fragments only when rotated or transparent, so body text is never touched) |
 | Save | Builds a new PDF with PDFium. Unchanged pages are copied untouched (vector, links, annotations kept); the "Sanitize" option removes risky annotations |
@@ -133,6 +134,10 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   replaces it with the plain text. New notes get no `/Popup` annotation (viewers create one
   when the note is opened). A highlight stays where it was drawn when the text under it is
   edited (the editor warns).
+* Bookmarks are shown but not edited, and a saved PDF has none: saving builds a new
+  document page by page, and the outline is not carried over. Long outlines are capped
+  (10,000 entries, 32 levels); past 200 distinct pages, a bookmark goes to the top of its
+  page rather than the exact spot.
 
 ## Why this differs from the original spec
 
