@@ -22,6 +22,7 @@ import { Toasts, type Toast } from "./components/Toasts";
 import { Icon } from "./components/Icon";
 import { useTheme } from "./lib/theme";
 import { useSidebarCollapsed } from "./lib/sidebar";
+import { UPDATE_CHECK_INTERVAL_MS, useAutoUpdate } from "./lib/autoUpdate";
 import { ComingSoon, Library, type Section, SECTION_INFO, Sidebar, paperName } from "./components/Shell";
 import { type Command, CommandPalette } from "./components/CommandPalette";
 import "./App.css";
@@ -78,19 +79,60 @@ export default function App() {
     api.listFonts().then(setFonts).catch(() => {});
   }, []);
 
-  // Released builds look for a newer version once at launch. Only a found update
-  // is reported; a failed or unconfigured check stays quiet.
+  // ---------- updates ----------
+  // Released builds check at launch and every few hours. With automatic updates on
+  // (the default) a found version downloads in the background and installs when
+  // NovaPDF quits. Off, the user installs it from the command palette.
+  const [autoUpdate, setAutoUpdate] = useAutoUpdate();
+  const autoUpdateRef = useRef(autoUpdate);
+  autoUpdateRef.current = autoUpdate;
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  /** What was last announced, so a periodic check does not repeat it. */
+  const announced = useRef<string | null>(null);
+
+  /** Folds in a check result. `quiet` keeps a failed background download silent. */
+  const takeUpdate = useCallback(
+    async (found: UpdateStatus, quiet: boolean) => {
+      if (!found.available) {
+        setUpdate(null);
+        return;
+      }
+      let s = found;
+      if (autoUpdateRef.current && !s.downloaded) {
+        try {
+          await api.downloadUpdate();
+          s = { ...s, downloaded: true };
+        } catch (err) {
+          if (!quiet) notify(`Couldn't download NovaPDF ${s.version}: ${errorMessage(err)}`, "error");
+        }
+      }
+      setUpdate(s);
+      const key = `${s.version}:${s.downloaded}`;
+      if (announced.current === key) return;
+      announced.current = key;
+      notify(
+        s.downloaded
+          ? `NovaPDF ${s.version} will install when you quit. To install it now, choose "Restart to install" in the command palette.`
+          : `NovaPDF ${s.version} is available. Install it from the command palette.`,
+      );
+    },
+    [notify],
+  );
+
+  // A failed or unconfigured background check stays quiet; unconfigured builds stop checking.
   useEffect(() => {
-    api
-      .checkUpdate()
-      .then((s) => {
-        if (!s.available) return;
-        setUpdate(s);
-        notify(`NovaPDF ${s.version} is available. Install it from the command palette.`);
-      })
-      .catch(() => {});
-  }, [notify]);
+    const check = () =>
+      api
+        .checkUpdate()
+        .then((s) => {
+          if (!s.configured) clearInterval(timer);
+          return takeUpdate(s, true);
+        })
+        .catch(() => {});
+    const timer = setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+    void check();
+    return () => clearInterval(timer);
+  }, [takeUpdate]);
 
   // Keep refs for event handlers registered once.
   const stateRef = useRef({ ws, tabs: tabState.tabs, tabId, section });
@@ -231,17 +273,34 @@ export default function App() {
     if (!docMode && section !== "grid") setSection("read");
   };
 
-  // ---------- updates ----------
-
   const checkForUpdates = async () => {
+    let s: UpdateStatus;
     try {
-      const s = await api.checkUpdate();
-      setUpdate(s.available ? s : null);
-      if (!s.configured) notify("This build can't update itself. Download new versions from the NovaPDF website.");
-      else if (s.available) notify(`NovaPDF ${s.version} is available.`);
-      else notify(`NovaPDF is up to date (version ${s.currentVersion}).`);
+      s = await api.checkUpdate();
     } catch (err) {
       notify(`Couldn't check for updates: ${errorMessage(err)}`, "error");
+      return;
+    }
+    if (!s.configured) notify("This build can't update itself. Download new versions from the NovaPDF website.");
+    else if (!s.available) notify(`NovaPDF is up to date (version ${s.currentVersion}).`);
+    announced.current = null; // a check the user asked for always says what it found
+    await takeUpdate(s, false);
+  };
+
+  const toggleAutoUpdate = async () => {
+    const on = !autoUpdate;
+    setAutoUpdate(on);
+    autoUpdateRef.current = on;
+    if (on) {
+      notify("Automatic updates are on. New versions download in the background and install when NovaPDF quits.");
+      if (update && !update.downloaded) await takeUpdate(update, false);
+    } else {
+      notify("Automatic updates are off. Check for updates from the command palette.");
+      if (update?.downloaded) {
+        await api.discardUpdate().catch(() => {});
+        setUpdate({ ...update, downloaded: false });
+        announced.current = null;
+      }
     }
   };
 
@@ -467,7 +526,8 @@ export default function App() {
     { id: "t-dark", title: "Use dark theme", description: theme === "dark" ? "Current theme" : "Switch the interface to dark", icon: "moon", tag: "View", run: theme === "dark" ? undefined : () => setTheme("dark") },
     { id: "t-system", title: "Match system theme", description: theme === "system" ? "Current theme" : "Follow the Windows light/dark setting", icon: "monitor", tag: "View", run: theme === "system" ? undefined : () => setTheme("system") },
     { id: "update-check", title: "Check for updates", description: "Look for a newer version of NovaPDF", icon: "download", tag: "Action", run: checkForUpdates },
-    { id: "update-install", title: `Install NovaPDF ${update?.version ?? "update"}`, description: "Download the update and restart NovaPDF", icon: "download", tag: "Action", run: update ? installUpdate : undefined },
+    { id: "update-install", title: update?.downloaded ? `Restart to install NovaPDF ${update.version}` : `Install NovaPDF ${update?.version ?? "update"}`, description: update?.downloaded ? "Install the downloaded update now instead of when NovaPDF quits" : "Download the update and restart NovaPDF", icon: "download", tag: "Action", run: update ? installUpdate : undefined },
+    { id: "update-auto", title: autoUpdate ? "Turn off automatic updates" : "Turn on automatic updates", description: autoUpdate ? "Check for and install updates yourself from this palette" : "Download updates in the background and install them when NovaPDF quits", icon: "download", tag: "Action", run: toggleAutoUpdate },
     { id: "s-hl", title: "Highlight text", description: "Not available yet", icon: "highlighter", tag: "Soon" },
     { id: "s-note", title: "Sticky note", description: "Not available yet", icon: "note", tag: "Soon" },
     { id: "s-ink", title: "Freehand ink", description: "Not available yet", icon: "ink", tag: "Soon" },

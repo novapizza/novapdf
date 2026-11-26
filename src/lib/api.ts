@@ -63,6 +63,10 @@ export const api = {
   listFonts: () => invoke<string[]>("list_fonts"),
 
   checkUpdate: () => invoke<UpdateStatus>("check_update"),
+  /** Downloads the update the last check found; it installs when the app quits. */
+  downloadUpdate: () => invoke<void>("download_update"),
+  /** Keeps a downloaded update from installing on quit. */
+  discardUpdate: () => invoke<void>("discard_update"),
   /** On success the app restarts, so this only settles if the install failed. */
   installUpdate: () => invoke<void>("install_update"),
 };
