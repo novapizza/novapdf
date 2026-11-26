@@ -145,3 +145,8 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   `NOVAPDF_DEV_PICK=list.txt` makes Open/Merge return the paths listed in that file instead
   of showing the native dialog, for scripted UI tests (drive the WebView via
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).
+
+## License
+
+NovaPDF is released under the [MIT License](LICENSE). PDFium, which is downloaded at
+install time, is distributed under its own BSD-3-Clause and Apache-2.0 licenses.
