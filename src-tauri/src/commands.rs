@@ -17,7 +17,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::host::{EXTRACT_TIMEOUT, Lane, Pool, RENDER_TIMEOUT, SAVE_TIMEOUT, SCAN_TIMEOUT};
 use crate::protocol::{
-    DocId, ImageFormat, LayoutArgs, LayoutResult, MAX_ANNOT_PAGES, OutputPage, PageAnnots,
+    DocId, ImageFormat, LayoutArgs, LayoutResult, MAX_ANNOT_PAGES, Outline, OutputPage, PageAnnots,
     PageEdits, PageInfo, PageText, Request, TextChars, Watermark, WatermarkScan,
 };
 
@@ -426,6 +426,24 @@ pub fn check_text_chars(chars: TextChars) -> Result<TextChars, String> {
         return Err("The PDF engine returned invalid text.".into());
     }
     Ok(chars)
+}
+
+/// The document's outline (bookmarks). Read on a thumbnail worker, so a long outline
+/// never queues in front of viewing or editing.
+#[tauri::command]
+pub async fn get_outline(state: State<'_, AppState>, doc_id: DocId) -> Result<Outline, String> {
+    let (v, _) = state
+        .pool
+        .call(Lane::Background, Request::Outline { doc_id }, EXTRACT_TIMEOUT)
+        .await?;
+    check_outline(v)
+}
+
+/// Worker output is untrusted: decode it, then check its bounds.
+pub fn check_outline(v: serde_json::Value) -> Result<Outline, String> {
+    let outline: Outline = serde_json::from_value(v).map_err(|e| e.to_string())?;
+    outline.validate()?;
+    Ok(outline)
 }
 
 #[derive(Deserialize)]

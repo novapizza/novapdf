@@ -323,6 +323,55 @@ pub struct TextChars {
     pub boxes: Vec<f32>,
 }
 
+/// One bookmark of a document's outline. The tree is sent flat, in document order,
+/// with each entry's depth, so a hostile, deeply nested outline cannot overflow a
+/// recursive decoder on either side.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OutlineItem {
+    /// Cut to `MAX_OUTLINE_TITLE` characters.
+    pub title: String,
+    /// 0 for top-level entries; at most `MAX_OUTLINE_DEPTH`.
+    pub depth: u32,
+    /// Page the bookmark goes to, or `None` when it has no destination in this file
+    /// (a link to another file, a script, or a broken destination).
+    pub page_index: Option<i32>,
+    /// Where on that page, in display space (0 = top), when the destination says.
+    pub y: Option<f32>,
+    /// Whether the file shows this entry's children expanded.
+    pub open: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Outline {
+    pub items: Vec<OutlineItem>,
+    /// True when entries were left out (too many, too deep, or a loop in the file).
+    pub truncated: bool,
+}
+
+/// Most outline entries listed for one document.
+pub const MAX_OUTLINE_ITEMS: usize = 10_000;
+/// Deepest outline level listed (0-based); deeper entries are left out.
+pub const MAX_OUTLINE_DEPTH: u32 = 32;
+/// Longest outline title, in characters.
+pub const MAX_OUTLINE_TITLE: usize = 500;
+
+impl Outline {
+    /// Checks what a worker returned: it parsed a hostile file, so its output is
+    /// untrusted too.
+    pub fn validate(&self) -> Result<(), String> {
+        let ok = self.items.len() <= MAX_OUTLINE_ITEMS
+            && self.items.iter().all(|it| {
+                it.depth <= MAX_OUTLINE_DEPTH
+                    && it.title.chars().count() <= MAX_OUTLINE_TITLE
+                    && it.page_index.is_none_or(|p| p >= 0)
+                    && it.y.is_none_or(coord_ok)
+            });
+        if ok { Ok(()) } else { Err("The PDF engine returned an invalid outline.".into()) }
+    }
+}
+
 // ---------- Requests / responses ----------
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -359,6 +408,9 @@ pub enum Request {
     Annotations { doc_id: DocId, first: i32, count: i32 },
     #[serde(rename_all = "camelCase")]
     TextChars { doc_id: DocId, page_index: i32 },
+    /// The document's bookmarks.
+    #[serde(rename_all = "camelCase")]
+    Outline { doc_id: DocId },
     Save {
         pages: Vec<OutputPage>,
         watermark: Option<Watermark>,
@@ -416,7 +468,8 @@ impl Request {
             | Request::Extract { doc_id, .. }
             | Request::FindWatermarks { doc_id, .. }
             | Request::Annotations { doc_id, .. }
-            | Request::TextChars { doc_id, .. } => vec![*doc_id],
+            | Request::TextChars { doc_id, .. }
+            | Request::Outline { doc_id } => vec![*doc_id],
             Request::Save { pages, .. } => {
                 let mut ids: Vec<DocId> = pages.iter().map(|p| p.doc_id).collect();
                 ids.sort_unstable();

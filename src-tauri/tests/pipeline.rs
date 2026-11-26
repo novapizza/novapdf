@@ -13,6 +13,7 @@ use novapdf_lib::worker::annots;
 use novapdf_lib::worker::edit::{self, Writer};
 use novapdf_lib::worker::extract;
 use novapdf_lib::worker::fonts::Fonts;
+use novapdf_lib::worker::outline;
 use novapdf_lib::worker::pdf::{Doc, Lib};
 
 fn helvetica() -> FontSpec {
@@ -552,6 +553,77 @@ fn full_pipeline() {
     let turned_note = turned_note.iter().find(|a| a.contents == "A new note").unwrap();
     // Display space of the turned page is 692 × 412: (60, 100) maps to (692 - 100 - 20, 60).
     assert!((turned_note.rect.x - 572.0).abs() < 0.5 && (turned_note.rect.y - 60.0).abs() < 0.5, "{:?}", turned_note.rect);
+
+    // ---- 17. Outline: flat, in document order, with depth, page and display-space y.
+    let odoc = Doc::load(&lib, outline_pdf()).unwrap();
+    let o = outline::list(&odoc);
+    let rows: Vec<(&str, u32, Option<i32>, bool)> =
+        o.items.iter().map(|i| (i.title.as_str(), i.depth, i.page_index, i.open)).collect();
+    assert_eq!(
+        rows,
+        [
+            ("Intro", 0, Some(0), true),
+            ("Back ground", 1, Some(1), false),
+            ("Action", 0, Some(2), false),
+            ("Hidden child", 1, Some(0), false),
+            ("Web", 0, None, false),
+            ("Loop", 0, None, false),
+        ],
+        "{o:?}"
+    );
+    let ys: Vec<Option<i32>> = o.items.iter().map(|i| i.y.map(|y| y.round() as i32)).collect();
+    // /XYZ 0 700 on a plain Letter page; /Fit has no y; /XYZ null 600 on a page whose
+    // CropBox top is 742; a y above the page is clamped to its top.
+    assert_eq!(ys, [Some(92), None, Some(142), Some(0), None, None]);
+    // "Loop" points back at "Intro": the walk stops there and says so.
+    assert!(o.truncated);
+    // A document without an outline has none.
+    let plain = Doc::load(&lib, comment_pdf()).unwrap();
+    assert_eq!(outline::list(&plain), Default::default());
+}
+
+/// Three pages (the third with a CropBox offset from its MediaBox) and an outline:
+/// a nested entry, a GoTo action with a closed child, a URI action, and an entry
+/// whose `/Next` loops back to the first.
+fn outline_pdf() -> Vec<u8> {
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 6 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /CropBox [100 50 512 742] >>".to_string(),
+        "<< /Type /Outlines /First 7 0 R /Last 10 0 R /Count 4 >>".to_string(),
+        // 7
+        "<< /Title (Intro) /Parent 6 0 R /Next 8 0 R /First 11 0 R /Last 11 0 R /Count 1 \
+         /Dest [3 0 R /XYZ 0 700 0] >>"
+            .to_string(),
+        // 8
+        "<< /Title (Action) /Parent 6 0 R /Prev 7 0 R /Next 9 0 R /First 12 0 R /Last 12 0 R /Count -1 \
+         /A << /S /GoTo /D [5 0 R /XYZ null 600 null] >> >>"
+            .to_string(),
+        // 9
+        "<< /Title (Web) /Parent 6 0 R /Prev 8 0 R /Next 10 0 R /A << /S /URI /URI (https://example.com) >> >>"
+            .to_string(),
+        // 10
+        "<< /Title (Loop) /Parent 6 0 R /Prev 9 0 R /Next 7 0 R >>".to_string(),
+        // 11: a PDF escape for CR LF inside the title.
+        r"<< /Title (Back\r\nground) /Parent 7 0 R /Dest [4 0 R /Fit] >>".to_string(),
+        // 12
+        "<< /Title (Hidden child) /Parent 8 0 R /Dest [3 0 R /XYZ 0 900 0] >>".to_string(),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).into_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).into_bytes());
+    for off in offsets {
+        pdf.extend(format!("{off:010} 00000 n \n").into_bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).into_bytes());
+    pdf
 }
 
 /// Decoded content of page 1.

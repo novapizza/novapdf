@@ -385,3 +385,12 @@ fn text_chars_from_the_worker_are_checked() {
     assert!(check_text_chars(TextChars { codes: vec![65], boxes: vec![1.0] }).is_err());
     assert!(check_text_chars(TextChars { codes: vec![65], boxes: vec![f32::NAN, 0.0, 0.0, 0.0] }).is_err());
 }
+
+#[test]
+fn outlines_from_the_worker_are_checked() {
+    let ok = serde_json::json!({ "items": [{ "title": "A", "depth": 0, "pageIndex": 2, "y": null, "open": false }], "truncated": false });
+    assert_eq!(check_outline(ok).unwrap().items[0].page_index, Some(2));
+    let deep = serde_json::json!({ "items": [{ "title": "A", "depth": 99, "pageIndex": null, "y": null, "open": false }], "truncated": false });
+    assert!(check_outline(deep).is_err());
+    assert!(check_outline(serde_json::json!({ "items": "nope" })).is_err());
+}

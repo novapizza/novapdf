@@ -4,13 +4,13 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { DocumentView } from "./DocumentView";
 import { type Workspace, initialHistory, reducer } from "../state/workspace";
-import type { AnnotInfo, LooseText, NewAnnot, PageEdits, PageText, TextChars } from "../lib/types";
+import type { AnnotInfo, LooseText, NewAnnot, Outline, PageEdits, PageText, TextChars } from "../lib/types";
 import { EMPTY_EDITS } from "../lib/types";
 import { DEFAULT_ANNOT_STYLE, type ReadTool } from "./AnnotationLayer";
 import { clearAnnotCache } from "../lib/annotations";
 import { clearCharCache } from "../lib/textSelect";
 import { tauriMock } from "../test/tauri";
-import { JPEG_BYTES, annotInfo, doc, newHighlight, newNote, page, pageText, paragraph } from "../test/fixtures";
+import { JPEG_BYTES, annotInfo, doc, newHighlight, newNote, outlineItem, page, pageText, paragraph } from "../test/fixtures";
 
 // jsdom has no layout: give the scroll area a real size so pages get a sensible scale.
 const sizeProps = ["clientWidth", "clientHeight"] as const;
@@ -72,6 +72,8 @@ interface Opts {
   tool?: ReadTool;
   /** Edits the pages start with, per page index. */
   edits?: Record<number, PageEdits>;
+  /** The document's bookmarks. */
+  outline?: Outline;
 }
 
 function setup(opts: Opts = {}) {
@@ -89,6 +91,7 @@ function setup(opts: Opts = {}) {
     }),
   );
   tauriMock.handle("text_chars", (a) => opts.chars?.[a.pageIndex as number] ?? { codes: [], boxes: [] });
+  tauriMock.handle("get_outline", () => opts.outline ?? { items: [], truncated: false });
   const tool: { current: ReadTool } = { current: opts.tool ?? "hand" };
   tauriMock.handle("extract_page", opts.extract ?? ((a) => (opts.text ?? TEXT)[a.pageIndex as number]));
   tauriMock.handle("layout_text", (a) => {
@@ -211,12 +214,36 @@ describe("DocumentView: reading", () => {
     await userEvent.click(within(strip).getByRole("button", { name: "Go to page 2" }));
     expect(document.querySelector<HTMLElement>(".doc-scroll")!.scrollTop).toBeGreaterThan(500);
     await userEvent.click(within(strip).getByRole("tab", { name: "Outline" }));
-    expect(screen.getByText("Outline not available yet")).toBeInTheDocument();
+    expect(await screen.findByText("No outline")).toBeInTheDocument();
     await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
     expect(await screen.findByText("No comments yet")).toBeInTheDocument();
     await userEvent.click(within(strip).getByRole("tab", { name: /Pages/ }));
     await userEvent.click(screen.getByRole("button", { name: "Toggle page thumbnails" }));
     expect(screen.queryByRole("complementary", { name: "Pages" })).not.toBeInTheDocument();
+  });
+
+  it("outline: a bookmark scrolls its spot on the page to the top", async () => {
+    const outline: Outline = {
+      items: [outlineItem("Second page", 0, 1), outlineItem("Halfway down", 0, 1, { y: 300 })],
+      truncated: false,
+    };
+    // Edit view shows page 2 unturned, so the bookmark's y is used.
+    const { switchMode } = setup({ mode: "edit", outline });
+    const scroll = document.querySelector<HTMLElement>(".doc-scroll")!;
+    const strip = screen.getByRole("complementary", { name: "Pages" });
+    await userEvent.click(within(strip).getByRole("tab", { name: "Outline" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Second page/ }));
+    const top = scroll.scrollTop;
+    expect(top).toBeGreaterThan(500);
+    await userEvent.click(screen.getByRole("button", { name: /^Halfway down/ }));
+    const scale = (900 - 48) / 612;
+    expect(scroll.scrollTop - top).toBeCloseTo(300 * scale, 0);
+    // Read view turns page 2 a quarter: the bookmark goes to the top of the page.
+    await switchMode("read");
+    await userEvent.click(screen.getByRole("button", { name: /^Second page/ }));
+    const readTop = scroll.scrollTop;
+    await userEvent.click(screen.getByRole("button", { name: /^Halfway down/ }));
+    expect(scroll.scrollTop).toBe(readTop);
   });
 
   it("jumping far renders the landing page first; pages seen before show at once", async () => {

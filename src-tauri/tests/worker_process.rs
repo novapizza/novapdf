@@ -143,6 +143,72 @@ fn comment_listing_is_capped_on_a_hostile_file() {
     assert_eq!(rest[0]["pageIndex"], 3);
 }
 
+/// A one-page PDF whose outline root is object 4 and whose bookmark dictionaries
+/// follow as objects 5, 6, …
+fn pdf_with_outline(bookmarks: &[String]) -> Vec<u8> {
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 4 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Outlines /First 5 0 R >>".to_string(),
+    ];
+    objects.extend(bookmarks.iter().cloned());
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).into_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).into_bytes());
+    for off in offsets {
+        pdf.extend(format!("{off:010} 00000 n \n").into_bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).into_bytes());
+    pdf
+}
+
+/// A hostile outline cannot make the walk run away: depth, entry count and loops are
+/// all bounded, and the reply says entries were left out.
+#[test]
+fn outline_is_bounded_on_a_hostile_file() {
+    let mut w = Worker::start();
+    let depth = |items: &Value| -> Vec<u64> {
+        items.as_array().unwrap().iter().map(|i| i["depth"].as_u64().unwrap()).collect()
+    };
+
+    // A chain of 40 nested entries: levels past 32 are left out.
+    let nested: Vec<String> = (0..40)
+        .map(|i| format!("<< /Title (L{i}) /Dest [3 0 R /Fit] /First {} 0 R /Count 1 >>", i + 6))
+        .collect();
+    w.ok(json!({"op": "open", "docId": 1}), &pdf_with_outline(&nested));
+    let (o, _) = w.ok(json!({"op": "outline", "docId": 1}), &[]);
+    assert_eq!(depth(&o["items"]), (0..=32).collect::<Vec<u64>>());
+    assert_eq!(o["truncated"], true);
+    assert_eq!(o["items"][0], json!({"title": "L0", "depth": 0, "pageIndex": 0, "y": null, "open": true}));
+
+    // 10 050 siblings: at most 10 000 are listed.
+    let wide: Vec<String> = (0..10_050).map(|i| format!("<< /Title (S{i}) /Next {} 0 R >>", i + 6)).collect();
+    w.ok(json!({"op": "open", "docId": 2}), &pdf_with_outline(&wide));
+    let (o, _) = w.ok(json!({"op": "outline", "docId": 2}), &[]);
+    assert_eq!(o["items"].as_array().unwrap().len(), 10_000);
+    assert_eq!(o["items"][9_999]["title"], "S9999");
+    assert_eq!(o["truncated"], true);
+
+    // An entry that is its own child and its own next sibling.
+    let looped = vec!["<< /Title (Me) /First 5 0 R /Next 5 0 R /Count 1 >>".to_string()];
+    w.ok(json!({"op": "open", "docId": 3}), &pdf_with_outline(&looped));
+    let (o, _) = w.ok(json!({"op": "outline", "docId": 3}), &[]);
+    assert_eq!(o["items"].as_array().unwrap().len(), 1);
+
+    // No outline at all, and a document that is not open.
+    w.ok(json!({"op": "open", "docId": 4}), &sample_pdf());
+    let (o, _) = w.ok(json!({"op": "outline", "docId": 4}), &[]);
+    assert_eq!(o, json!({"items": [], "truncated": false}));
+    assert_eq!(w.err(json!({"op": "outline", "docId": 99}), &[]), "Document is not open");
+    let _ = w.child.kill();
+}
+
 fn helvetica() -> Value {
     json!({"family": "Helvetica", "bold": false, "italic": false})
 }

@@ -151,6 +151,25 @@ export interface PageAnnots {
   more: number;
 }
 
+/** One bookmark of a document's outline. The tree comes flat, in document order. */
+export interface OutlineItem {
+  title: string;
+  /** 0 for top-level entries. */
+  depth: number;
+  /** Page in the source document, or null when the bookmark goes nowhere in this file. */
+  pageIndex: number | null;
+  /** Where on that page, in display space (0 = top), when the file says. */
+  y: number | null;
+  /** Whether the file shows this entry's children expanded. */
+  open: boolean;
+}
+
+export interface Outline {
+  items: OutlineItem[];
+  /** Entries were left out (too many, too deep, or a loop in the file). */
+  truncated: boolean;
+}
+
 /** Characters of a page: one UTF-16 code unit each, and x, y, width, height per character. */
 export interface TextChars {
   codes: number[];

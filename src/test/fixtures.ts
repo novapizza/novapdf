@@ -1,5 +1,5 @@
 // Builders for test data. Keep shapes in sync with src/lib/types.ts.
-import type { AnnotInfo, NewAnnot, OpenOutcome, PageText, Paragraph, TextBlock } from "../lib/types";
+import type { AnnotInfo, NewAnnot, OpenOutcome, OutlineItem, PageText, Paragraph, TextBlock } from "../lib/types";
 import { EMPTY_EDITS } from "../lib/types";
 import type { DocInfo, PageItem } from "../state/workspace";
 
@@ -61,6 +61,11 @@ export function pageText(extra: Partial<PageText> = {}): PageText {
 
 /** A tiny valid JPEG header, enough for a Blob. */
 export const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
+
+/** A bookmark: `pageIndex` in the source document, or null for one that goes nowhere. */
+export function outlineItem(title: string, depth: number, pageIndex: number | null, extra: Partial<OutlineItem> = {}): OutlineItem {
+  return { title, depth, pageIndex, y: null, open: false, ...extra };
+}
 
 /** A comment already in the file. */
 export function annotInfo(index: number, extra: Partial<AnnotInfo> = {}): AnnotInfo {

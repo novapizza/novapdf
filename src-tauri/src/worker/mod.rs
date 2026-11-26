@@ -12,6 +12,7 @@ pub mod content;
 pub mod edit;
 pub mod extract;
 pub mod fonts;
+pub mod outline;
 pub mod pdf;
 
 use std::collections::HashMap;
@@ -171,6 +172,10 @@ fn handle<'l>(
         Request::TextChars { doc_id, page_index } => {
             let doc = docs.get(&doc_id).ok_or("Document is not open")?;
             json(annots::text_chars(doc, page_index)?)
+        }
+        Request::Outline { doc_id } => {
+            let doc = docs.get(&doc_id).ok_or("Document is not open")?;
+            json(outline::list(doc))
         }
         Request::Save { pages, watermark, sanitize } => {
             let saved = edit::save(lib, docs, &pages, watermark.as_ref(), sanitize, fonts)?;
