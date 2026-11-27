@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { DocInfo } from "../state/workspace";
 import type { ThemePref } from "../lib/theme";
 import { Icon, type IconName } from "./Icon";
+import { APP_NAME } from "../lib/brand";
 
 /** Top-level areas of the app, shown in the sidebar. */
 export type Section = "library" | "read" | "grid" | "edit" | "sign" | "ocr" | "cloud" | "vault";
@@ -105,7 +106,7 @@ export function Sidebar(props: {
           <Icon name="book" size={18} />
         </span>
         <span className="brand-text">
-          <span className="brand-name">NovaPDF</span>
+          <span className="brand-name">{APP_NAME}</span>
         </span>
         <button
           className="ghost icon-btn sidebar-toggle"

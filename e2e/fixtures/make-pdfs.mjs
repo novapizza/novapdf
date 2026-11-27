@@ -4,7 +4,7 @@
 //   node e2e/fixtures/make-pdfs.mjs <outDir>
 //
 // sample.pdf  3 Letter pages. Page 1: a heading and two wrapped paragraphs. Every page
-//             carries a watermark tagged as NovaPDF writes it (/Artifact /Subtype (Watermark)).
+//             carries a watermark tagged as NovaQuire writes it (/Artifact /Subtype (Watermark)).
 // second.pdf  2 A4 pages with one line each (for merging).
 // spec-watermark.pdf  1 page, watermark tagged with a name /Subtype /Watermark.
 // outlined.pdf  4 pages with a two-level outline (bookmarks), see OUTLINED.
@@ -88,7 +88,7 @@ const paragraph = (x, y, lines, font = "F1", size = 12, leading = 15) =>
   `BT /${font} ${size} Tf ${leading} TL ${x} ${y} Td ${lines.map((l, i) => `${i ? "T* " : ""}(${esc(l)}) Tj`).join(" ")} ET`;
 
 /** A rotated, 30% watermark in an /Artifact marked-content section. `subtype` is the
- *  raw PDF value: "(Watermark)" (a string, as NovaPDF writes it) or "/Watermark" (a
+ *  raw PDF value: "(Watermark)" (a string, as NovaQuire writes it) or "/Watermark" (a
  *  name, as the PDF spec and Acrobat write it). */
 const watermark = (text, subtype = "(Watermark)") =>
   `/Artifact << /Type /Pagination /Subtype ${subtype} >> BDC q /GS1 gs 0.75 0.1 0.1 rg ` +

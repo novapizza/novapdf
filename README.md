@@ -1,4 +1,4 @@
-# NovaPDF
+# NovaQuire
 
 Desktop PDF editor: organise pages (reorder, rotate, delete, merge), edit existing text,
 add text boxes, and add or remove watermarks. Built with Tauri 2, Rust and native PDFium,
@@ -157,9 +157,45 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   of showing the native dialog, for scripted UI tests (drive the WebView via
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).
 
+## Product name and updates
+
+The app shipped as NovaPDF up to 0.2.1 and is now NovaQuire. Installed copies move to the
+new name through the normal auto-update; nobody has to reinstall.
+
+- **What changes:** only the name people see (window, menus, installer, Start menu, Dock,
+  release names). It lives in `productName` in `src-tauri/tauri.conf.json` and `APP_NAME` in
+  `src/lib/brand.ts`, which a test keeps equal.
+- **What must never change**, or existing installs stop updating or lose their settings: the
+  app identifier `io.novapdf.app`, the `novapdf` crate and program file, the `novapdf.*`
+  settings keys, and the updater endpoint and signing key.
+- **Windows:** an install is keyed by its product name, so the new installer would otherwise
+  sit next to the old one. `src-tauri/windows/hooks.nsh` retires the other name's install
+  after installing: it deletes that install's program, shortcuts and Apps & features entry,
+  re-creates the shortcuts under the new name and points a taskbar pin at the new program. It
+  keeps settings and the PDF file association, and touches nothing if the old program is
+  still locked (the next update retries).
+- **macOS:** the updater replaces the app in place, so it keeps its path. An updated copy is
+  still the file `NovaPDF.app` in Finder, while the Dock, menu bar and window say NovaQuire.
+  New downloads are `NovaQuire.app`.
+
+**If a renamed release fails to update people:**
+
+1. Stop the rollout: re-upload the previous release's `latest.json` to the bucket. Copies
+   that have not updated keep the old version and keep checking.
+2. Copies already on the new release go back with a newer version under the old name: set
+   `productName` and `APP_NAME` to `NovaPDF`, set the release names in
+   `.github/workflows/release.yml`, bump the version and release. Its installer retires the
+   NovaQuire install the same way.
+3. Fix the problem, then rename forward again with a higher version. Repeat until it sticks;
+   every step is an ordinary update because the hook is symmetric and the internal names
+   never change.
+
+Before releasing a renamed version, test the update from the last released version on
+Windows and macOS (see `TESTING.md`, "Testing a rename update").
+
 ## License
 
-NovaPDF is released under the [MIT License](LICENSE).
+NovaQuire is released under the [MIT License](LICENSE).
 
 The installers bundle third-party code under its own licenses, and ship those licenses with it:
 

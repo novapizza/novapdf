@@ -2,9 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { applyTheme, loadThemePref } from "./lib/theme";
+import { APP_NAME } from "./lib/brand";
 
 // Before first render, so a saved light/dark choice does not flash the other theme.
 applyTheme(loadThemePref());
+document.title = APP_NAME;
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

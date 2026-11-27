@@ -12,8 +12,8 @@ test("Check for updates reports that a development build can't update itself", a
   await expect(page.getByText(/This build can't update itself/)).toBeVisible();
   // Nothing was found, so there is nothing to install.
   await page.keyboard.press("Control+k");
-  await page.getByRole("textbox", { name: "Search commands" }).fill("install novapdf");
-  await expect(page.getByRole("option", { name: /Install NovaPDF update/ })).toHaveAttribute("aria-disabled", "true");
+  await page.getByRole("textbox", { name: "Search commands" }).fill("install novaquire");
+  await expect(page.getByRole("option", { name: /Install NovaQuire update/ })).toHaveAttribute("aria-disabled", "true");
 });
 
 test("automatic updates can be turned off and on from the palette", async ({ app }) => {

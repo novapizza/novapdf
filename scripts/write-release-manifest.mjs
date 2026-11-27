@@ -147,7 +147,7 @@ if (Object.keys(updater).length === 0) {
 } else {
   const json = {
     version,
-    notes: notes || `NovaPDF ${version}`,
+    notes: notes || `NovaQuire ${version}`,
     pub_date: releasedAt,
     platforms: updater,
   };
