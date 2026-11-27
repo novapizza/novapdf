@@ -19,7 +19,8 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "pdfium/*"
+      "pdfium/**/*",
+      "THIRD-PARTY-NOTICES.txt"
     ],
     "fileAssociations": [
       {

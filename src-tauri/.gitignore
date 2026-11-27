@@ -9,3 +9,4 @@
 # PDFium binary is downloaded by `npm run setup:pdfium`
 /pdfium/pdfium.dll
 /pdfium/libpdfium.*
+/pdfium/licenses/

@@ -159,5 +159,18 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
 
 ## License
 
-NovaPDF is released under the [MIT License](LICENSE). PDFium, which is downloaded at
-install time, is distributed under its own BSD-3-Clause and Apache-2.0 licenses.
+NovaPDF is released under the [MIT License](LICENSE).
+
+The installers bundle third-party code under its own licenses, and ship those licenses with it:
+
+- PDFium (BSD-3-Clause and Apache-2.0) and the libraries built into it, such as FreeType,
+  ICU and libjpeg-turbo. `npm install` fetches the binary together with its license files
+  into `src-tauri/pdfium/licenses/`, and they are installed next to the library.
+- The Rust crates and npm packages the app is built from, and the bundled OFL fonts. Their
+  licenses are in [src-tauri/THIRD-PARTY-NOTICES.txt](src-tauri/THIRD-PARTY-NOTICES.txt),
+  which is installed with the app. After changing dependencies, run `npm run notices` and
+  commit the result; the release workflow fails if the file is out of date
+  (`npm run notices:check`).
+
+When text needs a font that is not one of the PDF standard fonts, saving embeds an installed
+font. Fonts whose license forbids embedding (OS/2 `fsType` "Restricted") are skipped.

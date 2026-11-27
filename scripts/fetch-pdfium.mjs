@@ -17,7 +17,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,7 +78,7 @@ if (!target) {
 // The stamp records the arch set too, so switching to or from --universal refetches.
 const stamp = `${PDFIUM_RELEASE}${universal ? " universal" : ""}`;
 const libName = target.lib.split("/").pop();
-if (!force && existsSync(join(outDir, libName)) && existsSync(stampFile)) {
+if (!force && existsSync(join(outDir, libName)) && existsSync(join(outDir, "licenses")) && existsSync(stampFile)) {
   if (readFileSync(stampFile, "utf8").trim() === stamp) {
     console.log(`[pdfium] ${libName} (${stamp}) already present.`);
     process.exit(0);
@@ -125,6 +125,12 @@ try {
     copyFileSync(join(dirs[0], target.lib), out);
   }
   if (existsSync(join(dirs[0], "LICENSE"))) copyFileSync(join(dirs[0], "LICENSE"), join(outDir, "LICENSE"));
+  // The licenses of PDFium and the libraries built into it (FreeType, ICU,
+  // libjpeg-turbo, OpenJPEG, ...). Their notices must ship with the binary;
+  // the top-level LICENSE above only covers the pdfium-binaries build scripts.
+  const licenses = join(outDir, "licenses");
+  rmSync(licenses, { recursive: true, force: true });
+  cpSync(join(dirs[0], "licenses"), licenses, { recursive: true });
   writeFileSync(stampFile, `${stamp}\n`);
   console.log(`[pdfium] Installed ${libName} -> ${outDir}`);
 } finally {

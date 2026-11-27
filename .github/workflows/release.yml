@@ -48,6 +48,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # The bundled third-party notices must list what this build ships.
+      - name: Check third-party notices
+        run: npm run notices:check
+
       # The app is universal, so PDFium must be too; postinstall fetched only arm64.
       - name: Fetch universal PDFium
         run: node scripts/fetch-pdfium.mjs --universal --force
@@ -137,6 +141,10 @@ jobs:
       # npm ci runs the postinstall hook which calls scripts/fetch-pdfium.mjs
       - name: Install frontend dependencies
         run: npm ci
+
+      # The bundled third-party notices must list what this build ships.
+      - name: Check third-party notices
+        run: npm run notices:check
 
       - name: Install Azure Code Signing SDK
         run: |
