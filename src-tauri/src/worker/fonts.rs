@@ -247,19 +247,26 @@ impl Fonts {
         }
         let loaded = self
             .db()
-            .with_face_data(id, |data, index| {
-                // PDFium embeds whole TrueType files only: no collections, no CFF.
-                let ok = index == 0
-                    && data.len() <= MAX_FONT_FILE_BYTES
-                    && data.len() > 12
-                    && &data[..4] != b"ttcf"
-                    && &data[..4] != b"OTTO";
-                ok.then(|| Arc::new(data.to_vec()))
-            })
+            .with_face_data(id, |data, index| (index == 0 && embeddable(data)).then(|| Arc::new(data.to_vec())))
             .flatten();
         self.data.insert(id, loaded.clone());
         loaded.map(|d| (id, d))
     }
+}
+
+/// Whether a font file may be embedded whole in a saved PDF.
+///
+/// PDFium embeds whole TrueType files only: no collections, no CFF. The font's
+/// license must also allow embedding: OS/2 `fsType` "Restricted" forbids it.
+/// Preview & Print, Editable and Installable all allow it.
+fn embeddable(data: &[u8]) -> bool {
+    if data.len() > MAX_FONT_FILE_BYTES || data.len() <= 12 || &data[..4] == b"ttcf" || &data[..4] == b"OTTO" {
+        return false;
+    }
+    let Ok(face) = ttf_parser::Face::parse(data, 0) else {
+        return false;
+    };
+    face.permissions() != Some(ttf_parser::Permissions::Restricted)
 }
 
 fn covers(data: &[u8], text: &str) -> bool {

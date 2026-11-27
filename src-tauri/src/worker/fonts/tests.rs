@@ -185,6 +185,65 @@ mod more_tests {
         assert!(!covers(&[], ""));
     }
 
+    /// A minimal TrueType file: the tables ttf-parser requires, plus an OS/2
+    /// table with the given `fsType` when `fs_type` is set.
+    fn tiny_font(magic: &[u8; 4], fs_type: Option<u16>) -> Vec<u8> {
+        let mut head = vec![0u8; 54];
+        head[..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+        head[18..20].copy_from_slice(&1000u16.to_be_bytes()); // unitsPerEm
+        let mut hhea = vec![0u8; 36];
+        hhea[..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+        hhea[34..36].copy_from_slice(&1u16.to_be_bytes()); // numberOfHMetrics
+        let mut maxp = 0x0000_5000u32.to_be_bytes().to_vec();
+        maxp.extend_from_slice(&1u16.to_be_bytes()); // numGlyphs
+        let mut tables: Vec<(&[u8; 4], Vec<u8>)> = vec![(b"head", head), (b"hhea", hhea), (b"maxp", maxp)];
+        if let Some(fs_type) = fs_type {
+            let mut os2 = vec![0u8; 96];
+            os2[..2].copy_from_slice(&4u16.to_be_bytes()); // version 4
+            os2[8..10].copy_from_slice(&fs_type.to_be_bytes());
+            tables.push((b"OS/2", os2));
+        }
+        tables.sort_by_key(|(tag, _)| **tag);
+
+        let mut out = magic.to_vec();
+        out.extend_from_slice(&(tables.len() as u16).to_be_bytes());
+        out.extend_from_slice(&[0; 6]); // searchRange, entrySelector, rangeShift
+        let mut offset = 12 + 16 * tables.len();
+        let mut body = Vec::new();
+        for (tag, data) in &tables {
+            out.extend_from_slice(*tag);
+            out.extend_from_slice(&[0; 4]); // checksum (not checked)
+            out.extend_from_slice(&(offset as u32).to_be_bytes());
+            out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            body.extend_from_slice(data);
+            offset += data.len();
+        }
+        out.extend_from_slice(&body);
+        out
+    }
+
+    const TRUETYPE: &[u8; 4] = &[0, 1, 0, 0];
+
+    #[test]
+    fn embeddable_honours_the_font_license() {
+        // Installable, Editable and Preview & Print all allow embedding in a document.
+        assert!(embeddable(&tiny_font(TRUETYPE, Some(0))));
+        assert!(embeddable(&tiny_font(TRUETYPE, Some(0x0008))));
+        assert!(embeddable(&tiny_font(TRUETYPE, Some(0x0004))));
+        // No OS/2 table: no restriction stated.
+        assert!(embeddable(&tiny_font(TRUETYPE, None)));
+        // Restricted License embedding: must not be embedded.
+        assert!(!embeddable(&tiny_font(TRUETYPE, Some(0x0002))));
+    }
+
+    #[test]
+    fn embeddable_rejects_files_pdfium_cannot_embed() {
+        assert!(!embeddable(&tiny_font(b"ttcf", Some(0))));
+        assert!(!embeddable(&tiny_font(b"OTTO", Some(0))));
+        assert!(!embeddable(b"not a font at all"));
+        assert!(!embeddable(&[0, 1, 0, 0]));
+    }
+
     #[test]
     fn list_families_puts_standard_families_first() {
         let list = list_families();
