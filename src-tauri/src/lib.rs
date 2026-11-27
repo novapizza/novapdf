@@ -89,7 +89,8 @@ pub fn run() {
             // Hidden until the UI has loaded, so the user never sees a blank white
             // window. The fallback makes sure it appears even if loading stalls.
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
-                .title("NovaPDF")
+                // productName: the one place the window name comes from.
+                .title(&app.package_info().name)
                 .inner_size(1280.0, 840.0)
                 .min_inner_size(720.0, 480.0)
                 // Opens maximized; the size above is what "Restore down" returns to.

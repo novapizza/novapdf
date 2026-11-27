@@ -164,8 +164,8 @@ function render(packages) {
 
   const rule = "=".repeat(78);
   let out =
-    "NovaPDF third-party notices\n\n" +
-    "NovaPDF includes the open-source software listed below. Each component is\n" +
+    "NovaQuire third-party notices\n\n" +
+    "NovaQuire includes the open-source software listed below. Each component is\n" +
     "used under the license reproduced with it.\n\n" +
     "PDFium and the libraries compiled into it (FreeType, ICU, libjpeg-turbo,\n" +
     "OpenJPEG, libpng, zlib, Little CMS, Abseil, HarfBuzz and others) are\n" +

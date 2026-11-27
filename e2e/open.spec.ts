@@ -8,7 +8,7 @@ test.use({ appOptions: { grants: [FIXTURES.sample, FIXTURES.second, FIXTURES.not
 
 test("starts in the library with the sandboxed engine", async ({ app }) => {
   const { page } = app;
-  await expect(page).toHaveTitle("NovaPDF");
+  await expect(page).toHaveTitle("NovaQuire");
   await expect(page.getByRole("heading", { name: /Document Library/ })).toBeVisible();
   await expect(page.getByText("No document open")).toBeVisible();
   await expect(statusBar(page)).toContainText("PDFium · sandboxed");

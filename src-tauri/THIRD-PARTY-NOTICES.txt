@@ -1,6 +1,6 @@
-NovaPDF third-party notices
+NovaQuire third-party notices
 
-NovaPDF includes the open-source software listed below. Each component is
+NovaQuire includes the open-source software listed below. Each component is
 used under the license reproduced with it.
 
 PDFium and the libraries compiled into it (FreeType, ICU, libjpeg-turbo,

@@ -110,7 +110,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: NovaPDF ${{ github.ref_name }}
+          releaseName: NovaQuire ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
           # publish-r2 writes latest.json with R2 URLs instead.
@@ -227,7 +227,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: NovaPDF ${{ github.ref_name }}
+          releaseName: NovaQuire ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
           # publish-r2 writes latest.json with R2 URLs instead.
@@ -266,10 +266,15 @@ jobs:
           # The bundler names the macOS updater bundle after the product only, so
           # every release would overwrite one key in the flat bucket while an
           # older latest.json still points at it. Version it like the .dmg.
+          # Matches any product name (NovaQuire, or NovaPDF for a release under the
+          # old name) and skips files that already carry the version.
           VERSION="${TAG#v}"
-          for f in assets/NovaPDF_universal.app.tar.gz assets/NovaPDF_universal.app.tar.gz.sig; do
+          for f in assets/*_universal.app.tar.gz assets/*_universal.app.tar.gz.sig; do
             [ -e "$f" ] || continue
-            mv -v "$f" "assets/NovaPDF_${VERSION}_universal.${f#assets/NovaPDF_universal.}"
+            base="${f#assets/}"
+            product="${base%%_universal.*}"
+            case "$product" in *"_${VERSION}") continue ;; esac
+            mv -v "$f" "assets/${product}_${VERSION}_universal.${base#"${product}_universal."}"
           done
           ls -l assets
 

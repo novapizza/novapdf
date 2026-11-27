@@ -36,7 +36,7 @@ test("a second launch exits and leaves the running app open", async ({ app }) =>
 test("a second launch with a file opens it in the running app", async ({ app }) => {
   const env = { ...process.env };
   delete env.NOVAPDF_DEV_MULTI_INSTANCE;
-  // What Windows runs when the user double-clicks a PDF NovaPDF is the default app for.
+  // What Windows runs when the user double-clicks a PDF NovaQuire is the default app for.
   const second = spawn(APP_EXE, [FIXTURES.second], { env, stdio: "ignore" });
   await new Promise((resolve) => second.on("exit", resolve));
   await expect(toast(app.page, "Opened second.pdf (2 pages)")).toBeVisible();

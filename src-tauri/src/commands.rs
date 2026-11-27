@@ -34,8 +34,8 @@ pub struct AppState {
 /// The most files one launch (or one drop) may hand the app.
 const MAX_OPEN_BATCH: usize = 500;
 
-/// The files a launch names on its command line. Windows starts `NovaPDF.exe "<file>"`
-/// when the user opens a PDF that NovaPDF is the default app for, and a second launch
+/// The files a launch names on its command line. Windows starts `novapdf.exe "<file>"`
+/// when the user opens a PDF that the app is the default for, and a second launch
 /// forwards its arguments to the running app. `args[0]` is the program; flags are
 /// skipped; relative paths resolve against the launch's working directory.
 pub(crate) fn launch_paths<S: AsRef<std::ffi::OsStr>>(args: &[S], cwd: &Path) -> Vec<PathBuf> {

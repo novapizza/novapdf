@@ -1,4 +1,4 @@
-// Launches the real NovaPDF debug build and connects Playwright to its WebView2.
+// Launches the real NovaQuire debug build and connects Playwright to its WebView2.
 //
 // Debug-build hooks used here (both compiled out of release builds):
 //   NOVAPDF_DEV_OPEN     ';'-separated paths pre-granted as if dropped on the window.
@@ -138,7 +138,7 @@ async function findAppPage(browser: Browser): Promise<Page> {
     }
     await new Promise((r) => setTimeout(r, 200));
   }
-  throw new Error("The NovaPDF window did not load http://localhost:1420");
+  throw new Error("The NovaQuire window did not load http://localhost:1420");
 }
 
 /** `test` with an `app` fixture launched per test and closed after it. */

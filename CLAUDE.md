@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-NovaPDF is a desktop PDF editor built with Tauri 2, Rust and native PDFium (via `pdfium-render`), with a React 19 + TypeScript UI. [README.md](README.md) covers features, the security model and known limitations. [TESTING.md](TESTING.md) covers the test layers, coverage gates and where tests go. Read both before making non-trivial changes.
+NovaQuire (formerly NovaPDF) is a desktop PDF editor built with Tauri 2, Rust and native PDFium (via `pdfium-render`), with a React 19 + TypeScript UI. [README.md](README.md) covers features, the security model and known limitations. [TESTING.md](TESTING.md) covers the test layers, coverage gates and where tests go. Read both before making non-trivial changes.
 
 Priorities: performance and security come first. PDF input is treated as hostile.
 
@@ -68,6 +68,7 @@ Key invariants:
 - **Bounded inputs everywhere:** 512 MB file limit with a `%PDF-` header check, bounded IPC frames, render size caps, and validated geometry and text lengths. Worker output is checked (PNG/JPEG magic bytes, saves start with `%PDF-`). Keep new requests and responses within these limits.
 - Saves are atomic: the file is written to a temp file and then renamed over the target.
 - **Comments are created in read view only.** Edit mode is for content edits; it shows new comments dimmed and never creates them. Comments live in `/Annots`, so comment-only edits must never set `changed` in `build` (the content stream stays byte-for-byte). Page-view renders leave out new and changed comments (`viewEdits` in `types.ts`) and the overlay (`AnnotationLayer.tsx`) draws them, so typing into a note never re-renders the page; a note in the file that was moved (`changedAnnots[].at`) is left out of the page render too and drawn by the overlay. Thumbnails and saves use the full edits. The worker rejects comments that are not on the page. Comment geometry is in the same display space as `TextBlock`; in read view the overlay is turned with the page, so map pointer positions with `toUnrotated` (`lib/textSelect.ts`). `changedAnnots` run before `removedAnnots`, because their indices refer to the original page.
+- **The product name is display-only; installs depend on the internal names.** The app shipped as NovaPDF and is now NovaQuire. Only what users see uses the product name: `productName` in `tauri.conf.json`, `APP_NAME` in `src/lib/brand.ts` (a test keeps the two equal), the window title (read from `productName`), and release names. Never rename these, or auto-update breaks for existing installs: the app identifier `io.novapdf.app` (settings and WebView data, macOS bundle id, single-instance lock), the `novapdf` crate and program file (macOS restarts into it after an in-place update; both names' installs share it), the `novapdf.*` localStorage keys, and the updater endpoint and key (CI secrets). On Windows an install is keyed by product name, so `src-tauri/windows/hooks.nsh` retires the other name's install after installing; README "Product name and updates" has the release and rollback steps.
 
 Debug-only hooks, compiled out of release builds:
 

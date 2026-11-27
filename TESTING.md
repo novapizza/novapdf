@@ -1,4 +1,4 @@
-# Testing NovaPDF
+# Testing NovaQuire
 
 Three layers. Each one gates on coverage or behaviour, so when you add code the test run
 tells you what is missing.
@@ -141,6 +141,55 @@ Requirements:
 Run E2E through `npm run test:e2e`, not `npx playwright test`. The script normalises the
 drive letter. Without it, Playwright on Windows fails with "did not expect test.use()"
 when the shell's working directory starts with a lower-case `c:\`.
+
+## Testing a rename update
+
+A release that changes `productName` must be tested as a real auto-update from the last
+released version before it ships (README, "Product name and updates"). Unit tests only check
+that the names line up; on Windows the move between installs happens in the installer hook
+(`src-tauri/windows/hooks.nsh`) and can only be seen by running it.
+
+The test builds use a throwaway signing key and a local update server, so they never touch the
+real update channel. They do use the real app identifier, so they share settings with an
+installed copy on the same Windows account; restore it afterwards (last step).
+
+1. Make a throwaway key: `npx tauri signer generate --ci -p test -w <dir>/test.key`.
+2. Write a config overlay, `<dir>/old.conf.json`:
+   ```json
+   { "version": "0.2.1",
+     "bundle": { "createUpdaterArtifacts": true, "targets": ["nsis"] },
+     "plugins": { "updater": { "endpoints": ["http://127.0.0.1:8765/latest.json"],
+                               "pubkey": "<contents of test.key.pub>",
+                               "dangerousInsecureTransportProtocol": true } } }
+   ```
+   For each later build, copy it with a higher `version` and the `productName` to test.
+3. Build with `TAURI_SIGNING_PRIVATE_KEY` (the key file's contents) and
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD=test` set:
+   `npx tauri build --config <dir>/<overlay>.json`. Build the old version from the last
+   released commit, the new ones from the branch.
+4. Install the old build silently (`<setup>.exe /S`).
+5. Put the new build's `*-setup.exe` and `.sig` in a folder, write its manifest with
+   `TAG=v<version> RELEASE_BASE_URL=http://127.0.0.1:8765 node scripts/write-release-manifest.mjs <folder>`,
+   and serve it: `python -m http.server 8765 --bind 127.0.0.1 --directory <folder>`.
+6. Start the installed app, wait until the server log shows the setup download, then close
+   the window normally. The update installs on exit.
+7. Check, for the current Windows user:
+   - Apps & features (`HKCU\...\Uninstall`) lists only the new name; the old install folder
+     is gone.
+   - Start menu and desktop shortcuts exist under the new name only and target the new
+     folder; a taskbar pin still exists and targets the new folder. Pin the app before the
+     first round and keep the pin through a rename and a rename back: a pin keeps the file
+     name it was made with, so the rename back must find it by target, not by name.
+   - `HKCU\Software\Classes\PDF document\shell\open\command` and
+     `HKCU\Software\Classes\Applications\novapdf.exe\shell\open\command` point at the new
+     folder; double-clicking a PDF opens the app.
+   - Settings (theme, author name) are unchanged: `%LOCALAPPDATA%\io.novapdf.app` is kept.
+   - The new app starts and can update again: repeat steps 5–7 towards the other name.
+8. Restore: end on a build named like the copy you had installed, then install the official
+   release over it with `<official setup>.exe /S`.
+
+On macOS the updater replaces the app bundle in place, so check that an updated copy
+starts, shows the new name in the menu bar and Dock, keeps its settings, and updates again.
 
 ## Known bugs pinned by tests
 
