@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { basename } from "node:path";
 import { FIXTURES } from "./paths";
-import { type App, expect, statusBar, test, toast } from "./app";
+import { type App, expect, statusBar, test, toast, showView } from "./app";
 
 test.use({ appOptions: { grants: [FIXTURES.sample, FIXTURES.second] } });
 
@@ -18,7 +18,7 @@ async function openOrganizer(app: App, files: string[], pages: number) {
     await expect(toast(app.page, /^Merged /)).toBeVisible();
   }
   await expect(statusBar(app.page)).toContainText(`of ${pages}`);
-  await app.page.getByRole("button", { name: /Page Organizer/ }).click();
+  await showView(app.page, "Organize");
   await expect(app.page.getByRole("navigation", { name: "Selection tools" })).toBeVisible();
 }
 

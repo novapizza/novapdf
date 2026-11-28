@@ -2564,6 +2564,7 @@ name = "novapdf"
 version = "0.2.2"
 dependencies = [
  "fontdb",
+ "getrandom 0.4.3",
  "image",
  "libc",
  "lopdf",

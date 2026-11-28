@@ -377,14 +377,24 @@ impl Outline {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Request {
-    /// Payload: the PDF bytes.
+    /// Payload: the PDF bytes. `password` opens a file protected with one.
     #[serde(rename_all = "camelCase")]
-    Open { doc_id: DocId },
+    Open {
+        doc_id: DocId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+    },
     /// No payload: the PDF bytes are in a read-only shared-memory section (Windows).
     /// `handle` is a section handle the host has already duplicated into the worker
     /// with map-read access only; the worker maps it and then closes the handle.
     #[serde(rename_all = "camelCase")]
-    OpenShared { doc_id: DocId, handle: u64, len: u64 },
+    OpenShared {
+        doc_id: DocId,
+        handle: u64,
+        len: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     Close { doc_id: DocId },
     #[serde(rename_all = "camelCase")]
@@ -415,6 +425,9 @@ pub enum Request {
         pages: Vec<OutputPage>,
         watermark: Option<Watermark>,
         sanitize: bool,
+        /// Encrypts the saved file: set when a page comes from a password-protected file.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        encrypt: Option<Encrypt>,
     },
     /// Line breaks for text drawn with the given style (no document needed).
     Layout(LayoutArgs),
@@ -454,6 +467,54 @@ impl LayoutArgs {
 pub struct LayoutResult {
     /// Where each line starts, as character offsets into the text.
     pub line_starts: Vec<u32>,
+}
+
+/// The error a worker gives for a file that needs a password, or got the wrong one.
+/// The host matches on it to ask the user for one.
+pub const NEEDS_PASSWORD: &str = "This PDF is protected with a password.";
+
+/// Longest password accepted. PDF passwords are at most 127 bytes; this leaves room for
+/// what people paste, while keeping requests small.
+pub const MAX_PASSWORD_BYTES: usize = 1024;
+
+/// A password from the user: not empty, within bounds, and with no NUL (PDFium reads it
+/// as a C string, so a NUL would silently cut it short).
+pub fn validate_password(p: &str) -> Result<(), String> {
+    if p.is_empty() {
+        return Err("Enter the password.".into());
+    }
+    if p.len() > MAX_PASSWORD_BYTES || p.contains('\0') {
+        return Err("That password is not valid.".into());
+    }
+    Ok(())
+}
+
+/// AES-256 encryption for a saved file (PDF 2.0, revision 6).
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Encrypt {
+    /// Needed to open the saved file.
+    pub password: String,
+    /// The file encryption key: 32 random bytes, made by the host (the sandboxed worker
+    /// may not reach the OS random source).
+    pub key: Vec<u8>,
+}
+
+/// Never prints the password or the key.
+impl std::fmt::Debug for Encrypt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Encrypt { .. }")
+    }
+}
+
+impl Encrypt {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_password(&self.password)?;
+        if self.key.len() != 32 {
+            return Err("The encryption key is invalid.".into());
+        }
+        Ok(())
+    }
 }
 
 impl Request {

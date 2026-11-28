@@ -31,7 +31,9 @@ import { boxToRotated, toUnrotated } from "../lib/textSelect";
 import type { NewAnnot, PageEdits, PageInfo, Paragraph, Point, Rect, TextBlock, Watermark } from "../lib/types";
 import { EMPTY_EDITS, editsAreEmpty } from "../lib/types";
 import { type DocInfo, type PageItem, type ParagraphLink, displaySize } from "../state/workspace";
-import type { AnnotActions, AnnotRef, AnnotStyle, ReadTool, TextSel } from "./AnnotationLayer";
+import { type FindResult, type Hit, findInPages } from "../lib/find";
+import type { AnnotActions, AnnotRef, AnnotStyle, FindMarks, ReadTool, TextSel } from "./AnnotationLayer";
+import { FindBar } from "./FindBar";
 import { Inspector, LinkEditor } from "./Inspector";
 import { Icon } from "./Icon";
 import { MarksPanel } from "./MarksPanel";
@@ -44,6 +46,23 @@ const GAP = 16;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** Screen pixels per PDF point at actual size (96 px per inch, 72 pt per inch). */
+const PX_PER_PT = 96 / 72;
+/** The zoom the reader sees: 100% is the size of the printed page, whatever the
+ *  window width. (`zoom` in state is relative to fit-width, which is not a size.) */
+export const zoomPercent = (scale: number) => Math.round((scale / PX_PER_PT) * 100);
+/** Fit-width never blows a page up past this (1.5 = 150% of the printed size). On a
+ *  wide window a full-width page is uncomfortably large to read, and its render grows
+ *  with the square of its width, which is what makes pages slow to appear. Zooming in
+ *  past it is still the reader's choice. */
+const MAX_FIT = 1.5;
+/** Pause in typing before a find starts. */
+export const FIND_DELAY_MS = 200;
+
+interface Found extends FindResult {
+  searching: boolean;
+}
+const NOTHING_FOUND: Found = { hits: [], capped: false, searching: false };
 let blockCounter = 0;
 const newBlockId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${++blockCounter}`;
 
@@ -60,8 +79,11 @@ export interface DocumentViewProps {
   onChangeEdits: (updates: { id: string; edits: PageEdits }[], links?: ParagraphLink[]) => void;
   onExitEdit: () => void;
   onRemoveEverywhere: (text: string, docId: number) => void;
-  /** Opens the Watermark Studio. */
+  /** Opens the watermark dialog. */
   onWatermark: () => void;
+  /** Find in document: 0 while closed; a new number each time it is asked for. */
+  findRequest: number;
+  onFindClose: () => void;
   notify: (message: string, kind?: "info" | "error") => void;
   /** Read view: the comment tool in use and its colours. */
   readTool: ReadTool;
@@ -128,7 +150,8 @@ export function DocumentView(props: DocumentViewProps) {
       sizes[i] = editMode ? info : displaySize(info, p.rotation);
       if (sizes[i].width > maxW) maxW = sizes[i].width;
     }
-    const scale = Math.max(0.05, ((vw - 2 * PAD) * zoom) / maxW);
+    const fit = Math.min((vw - 2 * PAD) / maxW, MAX_FIT * PX_PER_PT);
+    const scale = Math.max(0.05, fit * zoom);
     const tops: number[] = new Array(pages.length);
     const heights: number[] = new Array(pages.length);
     let y = PAD;
@@ -760,6 +783,75 @@ export function DocumentView(props: DocumentViewProps) {
     setAnnotSel({ pageId, ref });
   };
 
+  // ---------- find in document (read view) ----------
+
+  const findOpen = !editMode && props.findRequest > 0;
+  const [findQuery, setFindQuery] = useState("");
+  const [found, setFound] = useState<Found>(NOTHING_FOUND);
+  const [hitIndex, setHitIndex] = useState(0);
+  // The search reads the file's text, so it only restarts when the pages change,
+  // not on every edit to one of them.
+  const pageKey = useMemo(() => pages.map((p) => p.id).join(), [pages]);
+  const findTerm = findOpen ? findQuery.trim() : "";
+  useEffect(() => {
+    setHitIndex(0);
+    if (!findTerm) {
+      setFound(NOTHING_FOUND);
+      return;
+    }
+    const signal = { cancelled: false };
+    setFound({ hits: [], capped: false, searching: true });
+    // Wait for a pause in typing before asking the worker for text.
+    const timer = setTimeout(() => {
+      void findInPages(live.current.pages, findTerm, signal, (hits) => {
+        if (!signal.cancelled) setFound({ hits, capped: false, searching: true });
+      }).then((r) => {
+        if (!signal.cancelled) setFound({ ...r, searching: false });
+      });
+    }, FIND_DELAY_MS);
+    return () => {
+      signal.cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [findTerm, pageKey]);
+
+  /** Scrolls so a match is a third of the way down the view. */
+  const showHit = (hit: Hit) => {
+    const i = indexById.get(hit.pageId);
+    if (i == null) return;
+    const page = pages[i];
+    const info = docs.get(page.docId)?.pages[page.pageIndex] ?? FALLBACK_SIZE;
+    const r = boxToRotated(hit.rects[0], page.rotation, info.width, info.height);
+    scrollToIndex(i, Math.max(PAD / 2, vh / 3 - r.y * geo.scale));
+  };
+  /** Next and previous wrap around. */
+  const goToHit = (n: number) => {
+    const count = found.hits.length;
+    if (count === 0) return;
+    const i = ((n % count) + count) % count;
+    setHitIndex(i);
+    showHit(found.hits[i]);
+  };
+  // The first matches to arrive: start at the first one on or after the page being read.
+  const hasHits = found.hits.length > 0;
+  useEffect(() => {
+    if (!hasHits) return;
+    const first = found.hits.findIndex((h) => (indexById.get(h.pageId) ?? -1) >= currentIndex);
+    goToHit(Math.max(0, first));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasHits]);
+
+  const findByPage = useMemo(() => {
+    const byPage = new Map<string, FindMarks>();
+    found.hits.forEach((hit, n) => {
+      let marks = byPage.get(hit.pageId);
+      if (!marks) byPage.set(hit.pageId, (marks = { rects: [], active: -1 }));
+      if (n === hitIndex) marks.active = marks.rects.length;
+      marks.rects.push(hit.rects);
+    });
+    return byPage;
+  }, [found.hits, hitIndex]);
+
   /** Goes to a bookmark: its page, with `y` (display space of the page) near the top. */
   const jumpTo = (i: number, y: number | null) => {
     const page = pages[i];
@@ -1035,7 +1127,7 @@ export function DocumentView(props: DocumentViewProps) {
               onClick={() => setTool("select")}
               title="Select and edit (V)"
             >
-              <Icon name="pointer" /> Select &amp; Edit
+              <Icon name="pointer" /> Select and edit
             </button>
             <button
               role="radio"
@@ -1044,25 +1136,13 @@ export function DocumentView(props: DocumentViewProps) {
               onClick={() => setTool("text")}
               title="Add a text box (T)"
             >
-              <Icon name="type" /> Add Text
+              <Icon name="type" /> Add text
             </button>
-            <button className="tile-tool" disabled title="Coming soon">
-              <Icon name="image" /> Insert Object
-            </button>
-            <button className="tile-tool" disabled title="Coming soon">
-              <Icon name="redact" /> Redact
-            </button>
-            <button className={`tile-tool${props.watermark ? " on" : ""}`} onClick={props.onWatermark} title="Watermark Studio">
-              <Icon name="stamp" /> Watermark Studio
-            </button>
-            <button className="tile-tool" disabled title="Coming soon">
-              <Icon name="form" /> Form Fields
+            <button className={`tile-tool${props.watermark ? " on" : ""}`} onClick={props.onWatermark} title="Add or change the watermark">
+              <Icon name="stamp" /> Watermark
             </button>
           </div>
           <div className="spacer" />
-          <span className="mode-pill">
-            <span className="dot" /> Interactive edit mode
-          </span>
           <span className="hint">
             <kbd>V</kbd> select · <kbd>T</kbd> text · <kbd>Esc</kbd> exit
           </span>
@@ -1104,7 +1184,7 @@ export function DocumentView(props: DocumentViewProps) {
             aria-label="Toggle page thumbnails"
             aria-pressed={showStrip}
           >
-            <Icon name="panelLeft" />
+            <Icon name="thumbnails" />
           </button>
           <div className="sep" />
           <button className="ghost icon-btn" onClick={() => scrollToIndex(currentIndex - 1)} disabled={currentIndex <= 0} title="Previous page" aria-label="Previous page">
@@ -1118,15 +1198,37 @@ export function DocumentView(props: DocumentViewProps) {
           <button className="ghost icon-btn" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, round2(z / 1.2)))} title="Zoom out (Ctrl+−)" aria-label="Zoom out">
             <Icon name="minus" />
           </button>
-          <span className="zoom">{Math.round(zoom * 100)}%</span>
+          <span className="zoom" title="Size on screen compared with the printed page">
+            {zoomPercent(geo.scale)}%
+          </span>
           <button className="ghost icon-btn" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, round2(z * 1.2)))} title="Zoom in (Ctrl++)" aria-label="Zoom in">
             <Icon name="plus" />
           </button>
           <div className="sep" />
-          <button className="ghost icon-btn" onClick={() => setZoom(1)} title="Fit width (Ctrl+0)" aria-label="Fit width">
+          <button
+            className={`ghost icon-btn${zoom === 1 ? " active" : ""}`}
+            onClick={() => setZoom(1)}
+            title="Fit width, up to 150% (Ctrl+0)"
+            aria-label="Fit width"
+            aria-pressed={zoom === 1}
+          >
             <Icon name="fitWidth" />
           </button>
         </div>
+        {findOpen && (
+          <FindBar
+            query={findQuery}
+            onQuery={setFindQuery}
+            count={found.hits.length}
+            index={hitIndex}
+            searching={found.searching}
+            capped={found.capped}
+            onNext={() => goToHit(hitIndex + 1)}
+            onPrev={() => goToHit(hitIndex - 1)}
+            onClose={props.onFindClose}
+            request={props.findRequest}
+          />
+        )}
         <div className="doc-scroll" ref={scrollRef} tabIndex={0} onScroll={onScroll}>
           <div className="doc-canvas" style={{ height: geo.total, width: geo.contentW }}>
             {[...mounted].map((i) => {
@@ -1163,6 +1265,7 @@ export function DocumentView(props: DocumentViewProps) {
                   annotSelected={annotSel?.pageId === page.id ? annotSel.ref : null}
                   noteDraft={noteDraft?.pageId === page.id ? noteDraft.annot : null}
                   textSel={textSel?.pageId === page.id ? textSel.sel : null}
+                  find={findByPage.get(page.id) ?? null}
                   annotActions={annotActions}
                 />
               );
@@ -1317,7 +1420,7 @@ function Filmstrip(props: {
           Outline
         </button>
         <button role="tab" aria-selected={tab === "marks"} className={tab === "marks" ? "active" : ""} onClick={() => setTab("marks")}>
-          Marks
+          Comments
         </button>
       </div>
       {tab === "pages" ? (
@@ -1339,10 +1442,6 @@ function Filmstrip(props: {
           {tab === "outline" ? props.outline : props.marks}
         </div>
       )}
-      <div className="strip-foot">
-        <Icon name={props.editMode ? "edit" : "note"} size={14} />
-        {props.editMode ? "Editing" : "Reading & review"}
-      </div>
     </aside>
   );
 }

@@ -3,7 +3,9 @@
 //! Security model for file access: the web UI never supplies a path to read or write.
 //! Paths come from native dialogs opened here, or from OS drag-and-drop events and
 //! launch command lines (a double-clicked PDF), which Rust records as one-time grants
-//! before the UI hears about them.
+//! before the UI hears about them. Recently opened files (`recent.rs`) are kept here
+//! too, and the UI names one only by an id. A file that needs a password is held the
+//! same way: the UI gets an id for it and sends the password with that id.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -15,9 +17,10 @@ use tauri::ipc::Response;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::recent::{Recent, RecentView, now_ms};
 use crate::host::{EXTRACT_TIMEOUT, Lane, Pool, RENDER_TIMEOUT, SAVE_TIMEOUT, SCAN_TIMEOUT};
 use crate::protocol::{
-    DocId, ImageFormat, LayoutArgs, LayoutResult, MAX_ANNOT_PAGES, Outline, OutputPage, PageAnnots,
+    DocId, Encrypt, ImageFormat, NEEDS_PASSWORD, validate_password, LayoutArgs, LayoutResult, MAX_ANNOT_PAGES, Outline, OutputPage, PageAnnots,
     PageEdits, PageInfo, PageText, Request, TextChars, Watermark, WatermarkScan,
 };
 
@@ -29,6 +32,39 @@ pub struct AppState {
     open_files: Mutex<OpenFiles>,
     /// Files named on a launch's command line, granted and waiting for the UI to take.
     launch: Mutex<Vec<PathBuf>>,
+    recent: Mutex<Recent>,
+    /// Files waiting for a password, by the id the UI was given.
+    locked: Mutex<Locked>,
+}
+
+/// How many files may wait for a password at once (the oldest is dropped).
+const MAX_LOCKED: usize = 64;
+
+/// Files the user picked that turned out to need a password. Kept so the password can
+/// be sent with an id: the UI still never names a path.
+#[derive(Default)]
+pub(crate) struct Locked {
+    next: u32,
+    files: Vec<(u32, PathBuf)>,
+}
+
+impl Locked {
+    pub(crate) fn add(&mut self, path: PathBuf) -> u32 {
+        self.next += 1;
+        if self.files.len() == MAX_LOCKED {
+            self.files.remove(0);
+        }
+        self.files.push((self.next, path));
+        self.next
+    }
+
+    pub(crate) fn get(&self, id: u32) -> Option<PathBuf> {
+        self.files.iter().find(|(i, _)| *i == id).map(|(_, p)| p.clone())
+    }
+
+    pub(crate) fn remove(&mut self, id: u32) {
+        self.files.retain(|(i, _)| *i != id);
+    }
 }
 
 /// The most files one launch (or one drop) may hand the app.
@@ -88,13 +124,55 @@ fn identify(path: &Path) -> Option<(PathBuf, FileStamp)> {
 }
 
 impl AppState {
-    pub fn new(pool: Pool) -> Self {
+    /// `recent_file` is where the recent files list is stored; `None` keeps it in memory.
+    pub fn new(pool: Pool, recent_file: Option<PathBuf>) -> Self {
         Self {
             pool,
             grants: Mutex::new(HashSet::new()),
             open_files: Mutex::new(OpenFiles::default()),
             launch: Mutex::new(Vec::new()),
+            recent: Mutex::new(Recent::load(recent_file)),
+            locked: Mutex::new(Locked::default()),
         }
+    }
+
+    // ---------- recent files ----------
+
+    fn recent_view(&self) -> RecentView {
+        self.recent.lock().unwrap().view()
+    }
+
+    /// Applies a change to the list and stores it. A failed write is not an error for
+    /// the caller: the list in memory is still right for this session.
+    fn change_recent(&self, f: impl FnOnce(&mut Recent) -> bool) {
+        let mut r = self.recent.lock().unwrap();
+        if f(&mut r) {
+            if let Err(e) = r.save() {
+                eprintln!("{e}");
+            }
+        }
+    }
+
+    /// A file that opened: it goes to the top of the list.
+    fn record_open(&self, key: PathBuf) {
+        self.change_recent(|r| r.record(key, now_ms()));
+    }
+
+    /// The file behind a list entry, if it is still there. A file that was moved or
+    /// deleted is taken off the list, and the outcome says so.
+    fn recent_target(&self, id: u32) -> Result<PathBuf, OpenOutcome> {
+        let found = self.recent.lock().unwrap().path_of(id);
+        let Some(path) = found else {
+            return Err(OpenOutcome::failed("?".into(), "This file is no longer in the recent list."));
+        };
+        if std::fs::metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+            self.change_recent(|r| r.remove(id));
+            return Err(OpenOutcome::failed(
+                file_name_of(&path),
+                "This file was moved or deleted, so it was taken off the recent list.",
+            ));
+        }
+        Ok(path)
     }
 
     /// Grants files named on a launch's command line and queues them for the UI.
@@ -136,6 +214,8 @@ pub struct OpenedDocument {
     doc_id: DocId,
     file_name: String,
     pages: Vec<PageInfo>,
+    /// Opened with a password: a save keeps it.
+    protected: bool,
 }
 
 #[derive(Serialize)]
@@ -144,6 +224,16 @@ pub struct OpenOutcome {
     file_name: String,
     document: Option<OpenedDocument>,
     error: Option<String>,
+    /// The file needs a password: send it with this id (`unlock_file`). With `error`
+    /// set as well, the password just tried was wrong.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    locked: Option<u32>,
+}
+
+impl OpenOutcome {
+    fn failed(file_name: String, error: impl Into<String>) -> Self {
+        OpenOutcome { file_name, document: None, error: Some(error.into()), locked: None }
+    }
 }
 
 fn file_name_of(path: &Path) -> String {
@@ -169,37 +259,96 @@ fn read_pdf(path: &Path) -> Result<Vec<u8>, String> {
 }
 
 async fn open_path(state: &AppState, path: PathBuf) -> OpenOutcome {
+    open_file(state, path, None).await
+}
+
+/// Opens a file, with the password for it when `unlock` names the waiting entry.
+async fn open_file(state: &AppState, path: PathBuf, unlock: Option<(u32, String)>) -> OpenOutcome {
     let file_name = file_name_of(&path);
+    let opened = |doc_id: DocId, pages: Vec<PageInfo>| OpenOutcome {
+        document: Some(OpenedDocument {
+            doc_id,
+            file_name: file_name.clone(),
+            pages,
+            protected: state.pool.password_of(doc_id).is_some(),
+        }),
+        file_name: file_name.clone(),
+        error: None,
+        locked: None,
+    };
     let id_path = path.clone();
     let identity = tokio::task::spawn_blocking(move || identify(&id_path)).await.ok().flatten();
     if let Some((key, stamp)) = &identity {
-        if let Some((doc_id, pages)) = state.open_files.lock().unwrap().lookup(key, *stamp) {
-            return OpenOutcome {
-                document: Some(OpenedDocument { doc_id, file_name: file_name.clone(), pages }),
-                file_name,
-                error: None,
-            };
+        let open = state.open_files.lock().unwrap().lookup(key, *stamp);
+        if let Some((doc_id, pages)) = open {
+            // Already open this session (unlocked then, if it needed a password).
+            state.record_open(key.clone());
+            if let Some((id, _)) = &unlock {
+                state.locked.lock().unwrap().remove(*id);
+            }
+            return opened(doc_id, pages);
         }
     }
-    let read = tokio::task::spawn_blocking(move || read_pdf(&path))
+    let read_path = path.clone();
+    let read = tokio::task::spawn_blocking(move || read_pdf(&read_path))
         .await
         .map_err(|e| e.to_string())
         .and_then(|r| r);
+    let password = unlock.as_ref().map(|(_, p)| p.clone());
     let result = match read {
-        Ok(bytes) => state.pool.open(bytes).await,
+        Ok(bytes) => state.pool.open(bytes, password).await,
         Err(e) => Err(e),
     };
-    if let (Ok((doc_id, pages)), Some((key, stamp))) = (&result, identity) {
-        state.open_files.lock().unwrap().remember(key, stamp, *doc_id, pages.clone());
-    }
     match result {
-        Ok((doc_id, pages)) => OpenOutcome {
-            document: Some(OpenedDocument { doc_id, file_name: file_name.clone(), pages }),
-            file_name,
-            error: None,
+        Ok((doc_id, pages)) => {
+            if let Some((key, stamp)) = identity {
+                state.open_files.lock().unwrap().remember(key.clone(), stamp, doc_id, pages.clone());
+                state.record_open(key);
+            }
+            if let Some((id, _)) = &unlock {
+                state.locked.lock().unwrap().remove(*id);
+            }
+            opened(doc_id, pages)
+        }
+        // Needs a password: hold the file and hand the UI an id to send it with. A
+        // wrong password keeps the same id, so the user can try again.
+        Err(e) if e == NEEDS_PASSWORD => match unlock {
+            Some((id, _)) => OpenOutcome {
+                file_name,
+                document: None,
+                error: Some("Wrong password. Try again.".into()),
+                locked: Some(id),
+            },
+            None => {
+                let id = state.locked.lock().unwrap().add(path);
+                OpenOutcome { file_name, document: None, error: None, locked: Some(id) }
+            }
         },
-        Err(e) => OpenOutcome { file_name, document: None, error: Some(e) },
+        Err(e) => {
+            if let Some((id, _)) = &unlock {
+                state.locked.lock().unwrap().remove(*id);
+            }
+            OpenOutcome::failed(file_name, e)
+        }
     }
+}
+
+/// Opens a file that needs a password, named by the id `open_*` gave for it.
+#[tauri::command]
+pub async fn unlock_file(state: State<'_, AppState>, locked_id: u32, password: String) -> Result<OpenOutcome, String> {
+    let Some(path) = state.locked.lock().unwrap().get(locked_id) else {
+        return Ok(OpenOutcome::failed("?".into(), "This file is no longer waiting for a password. Open it again."));
+    };
+    if let Err(e) = validate_password(&password) {
+        return Ok(OpenOutcome { file_name: file_name_of(&path), document: None, error: Some(e), locked: Some(locked_id) });
+    }
+    Ok(open_file(&state, path, Some((locked_id, password))).await)
+}
+
+/// The user chose not to enter a password: forget the waiting file.
+#[tauri::command]
+pub fn discard_locked(state: State<'_, AppState>, locked_id: u32) {
+    state.locked.lock().unwrap().remove(locked_id);
 }
 
 #[tauri::command]
@@ -232,11 +381,7 @@ pub async fn open_with_dialog(
     for f in files {
         match f.into_path() {
             Ok(p) => out.push(open_path(&state, p).await),
-            Err(e) => out.push(OpenOutcome {
-                file_name: "?".into(),
-                document: None,
-                error: Some(e.to_string()),
-            }),
+            Err(e) => out.push(OpenOutcome::failed("?".into(), e.to_string())),
         }
     }
     Ok(out)
@@ -251,22 +396,14 @@ pub async fn open_dropped(
     for p in paths.into_iter().take(MAX_OPEN_BATCH) {
         let path = PathBuf::from(&p);
         if !state.take_grant(&path) {
-            out.push(OpenOutcome {
-                file_name: file_name_of(&path),
-                document: None,
-                error: Some("This file was not dropped onto the window.".into()),
-            });
+            out.push(OpenOutcome::failed(file_name_of(&path), "This file was not dropped onto the window."));
             continue;
         }
         let is_pdf = path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
         if !is_pdf {
-            out.push(OpenOutcome {
-                file_name: file_name_of(&path),
-                document: None,
-                error: Some("Only PDF files can be opened.".into()),
-            });
+            out.push(OpenOutcome::failed(file_name_of(&path), "Only PDF files can be opened."));
             continue;
         }
         out.push(open_path(&state, path).await);
@@ -279,6 +416,46 @@ pub async fn open_dropped(
 #[tauri::command]
 pub fn take_launch_files(state: State<'_, AppState>) -> Vec<String> {
     state.take_launch()
+}
+
+/// The recent files list: names to show and ids to open them by.
+#[tauri::command]
+pub fn list_recent(state: State<'_, AppState>) -> RecentView {
+    state.recent_view()
+}
+
+/// Opens a file from the recent list. The UI names it only by its id.
+#[tauri::command]
+pub async fn open_recent(state: State<'_, AppState>, id: u32) -> Result<OpenOutcome, String> {
+    Ok(match state.recent_target(id) {
+        Ok(path) => open_path(&state, path).await,
+        Err(outcome) => outcome,
+    })
+}
+
+#[tauri::command]
+pub fn remove_recent(state: State<'_, AppState>, id: u32) -> RecentView {
+    state.change_recent(|r| r.remove(id));
+    state.recent_view()
+}
+
+#[tauri::command]
+pub fn clear_recent(state: State<'_, AppState>) -> RecentView {
+    state.change_recent(|r| {
+        r.clear();
+        true
+    });
+    state.recent_view()
+}
+
+/// Off also forgets the list.
+#[tauri::command]
+pub fn set_recent_enabled(state: State<'_, AppState>, enabled: bool) -> RecentView {
+    state.change_recent(|r| {
+        r.set_enabled(enabled);
+        true
+    });
+    state.recent_view()
 }
 
 #[tauri::command]
@@ -477,6 +654,45 @@ fn safe_file_name(name: &str) -> String {
 pub struct SaveOutcome {
     path: String,
     warnings: Vec<String>,
+    /// The saved file needs a password to open.
+    protected: bool,
+}
+
+/// How a save is encrypted: with the password of the first page (in page order) that
+/// comes from a password-protected file, if any. Pages from files with different
+/// passwords get a warning, since the saved file can have only one.
+pub(crate) fn save_encryption(
+    pages: &[OutputPage],
+    password_of: impl Fn(DocId) -> Option<String>,
+    key: impl FnOnce() -> Result<Vec<u8>, String>,
+) -> Result<(Option<Encrypt>, Option<String>), String> {
+    let mut seen: Vec<DocId> = Vec::new();
+    let mut passwords: Vec<String> = Vec::new();
+    for p in pages {
+        if seen.contains(&p.doc_id) {
+            continue;
+        }
+        seen.push(p.doc_id);
+        if let Some(pw) = password_of(p.doc_id)
+            && !passwords.contains(&pw)
+        {
+            passwords.push(pw);
+        }
+    }
+    let Some(first) = passwords.first().cloned() else {
+        return Ok((None, None));
+    };
+    let warning = (passwords.len() > 1).then(|| {
+        "These pages come from files with different passwords. The saved file opens with the password of the first of them in the page order.".to_string()
+    });
+    Ok((Some(Encrypt { password: first, key: key()? }), warning))
+}
+
+/// 32 random bytes from the OS.
+fn random_key() -> Result<Vec<u8>, String> {
+    let mut key = vec![0u8; 32];
+    getrandom::fill(&mut key).map_err(|e| format!("Could not make an encryption key: {e}"))?;
+    Ok(key)
 }
 
 /// Builds the output PDF, asks where to save it and writes it atomically.
@@ -532,10 +748,12 @@ pub async fn save_with_dialog(
         target.set_extension("pdf");
     }
 
-    let req = Request::Save { pages: args.pages, watermark: args.watermark, sanitize: args.sanitize };
+    let (encrypt, mixed) = save_encryption(&args.pages, |id| state.pool.password_of(id), random_key)?;
+    let protected = encrypt.is_some();
+    let req = Request::Save { pages: args.pages, watermark: args.watermark, sanitize: args.sanitize, encrypt };
     let (meta, bytes) = state.pool.call(Lane::Interactive, req, SAVE_TIMEOUT).await?;
     // Worker output is untrusted: keep only short plain strings.
-    let warnings: Vec<String> = meta
+    let mut warnings: Vec<String> = meta
         .get("warnings")
         .and_then(|w| w.as_array())
         .map(|a| a.iter().filter_map(|v| v.as_str()).take(10).map(|s| s.chars().take(300).collect()).collect())
@@ -548,7 +766,8 @@ pub async fn save_with_dialog(
     tokio::task::spawn_blocking(move || write_atomically(&path_for_write, &bytes))
         .await
         .map_err(|e| e.to_string())??;
-    Ok(Some(SaveOutcome { path: target.to_string_lossy().into_owned(), warnings }))
+    warnings.extend(mixed);
+    Ok(Some(SaveOutcome { path: target.to_string_lossy().into_owned(), warnings, protected }))
 }
 
 /// Writes to a temporary file in the same folder, then renames over the target, so a

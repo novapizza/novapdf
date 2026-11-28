@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 import { api, errorMessage } from "./lib/api";
-import type { OpenOutcome, PageEdits, UpdateStatus, Watermark } from "./lib/types";
+import type { OpenOutcome, PageEdits, RecentView, UpdateStatus, Watermark } from "./lib/types";
 import { editsAreEmpty } from "./lib/types";
 import {
   type Action,
@@ -27,12 +27,12 @@ import {
 import { WatermarkDialog } from "./components/WatermarkDialog";
 import { CleanDialog, type ScanResult } from "./components/CleanDialog";
 import { Toasts, type Toast } from "./components/Toasts";
+import { PasswordDialog } from "./components/PasswordDialog";
 import { Icon } from "./components/Icon";
 import { useTheme } from "./lib/theme";
-import { useSidebarCollapsed } from "./lib/sidebar";
 import { UPDATE_CHECK_INTERVAL_MS, useAutoUpdate } from "./lib/autoUpdate";
 import { APP_NAME } from "./lib/brand";
-import { ComingSoon, Library, type Section, SECTION_INFO, Sidebar, paperName } from "./components/Shell";
+import { Library, ModeSwitch, type Section, SettingsMenu, paperName } from "./components/Shell";
 import { type Command, CommandPalette } from "./components/CommandPalette";
 import "./App.css";
 
@@ -71,24 +71,40 @@ export default function App() {
   const docMode = section === "read" || section === "edit" ? section : null;
   const [thumbWidth, setThumbWidth] = useState(170);
   const [sanitize, setSanitize] = useState(true);
+  /** Recently opened files, from Rust; `null` until loaded. */
+  const [recent, setRecent] = useState<RecentView | null>(null);
   const [theme, setTheme] = useTheme();
-  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
+  /** Find in document: 0 while closed, otherwise a number that changes on each request. */
+  const [findRequest, setFindRequest] = useState(0);
   const [fonts, setFonts] = useState<string[]>(["Helvetica", "Times", "Courier"]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   /** A file drag is over the window: show the drop overlay. */
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
+  /** Files waiting for a password, in the order they were opened. */
+  const [locked, setLocked] = useState<{ id: number; fileName: string; mode: "tabs" | "merge" }[]>([]);
+  const [unlock, setUnlock] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
 
   const notify = useCallback((message: string, kind: "info" | "error" = "info") => {
     const id = ++toastId;
     setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 9000 : 4000);
+    // Errors stay until dismissed: they often say what to do next.
+    if (kind === "info") setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   }, []);
 
   useEffect(() => {
     api.listFonts().then(setFonts).catch(() => {});
   }, []);
+
+  /** The list is a convenience: if it cannot be read, the Library simply has none. */
+  const refreshRecent = useCallback(() => {
+    api.listRecent().then(setRecent, () => {});
+  }, []);
+  useEffect(refreshRecent, [refreshRecent]);
+  /** Remove, clear and on/off hand back the new list; a failure is reported. */
+  const changeRecent = (change: Promise<RecentView>) =>
+    change.then(setRecent, (e) => notify(errorMessage(e), "error"));
 
   // ---------- updates ----------
   // Released builds check at launch and every few hours. With automatic updates on
@@ -164,7 +180,12 @@ export default function App() {
   const addOutcomes = useCallback(
     (outcomes: OpenOutcome[], mode: "tabs" | "merge") => {
       for (const o of outcomes) if (o.error) notify(`${o.fileName}: ${o.error}`, "error");
+      // Protected files wait for their password; the rest open now.
+      const waiting = outcomes.filter((o) => o.locked != null && !o.error);
+      if (waiting.length) setLocked((q) => [...q, ...waiting.map((o) => ({ id: o.locked!, fileName: o.fileName, mode }))]);
       const opened: DocInfo[] = outcomes.flatMap((o) => (o.document ? [o.document] : []));
+      // Rust has put opened files on the recent list, and taken off any that were gone.
+      refreshRecent();
       if (opened.length === 0) return;
       setDocs((prev) => new Map([...prev, ...opened.map((d) => [d.docId, d] as const)]));
       const { tabs, tabId: front, section: from } = stateRef.current;
@@ -191,8 +212,47 @@ export default function App() {
       if (fresh.length) notify(`Opened ${count(fresh)}`);
       for (const d of opened) if (!fresh.includes(d)) notify(`${d.fileName} is already open`);
     },
-    [notify],
+    [notify, refreshRecent],
   );
+
+  /** Sends the password for the first waiting file. A wrong one keeps the dialog open. */
+  const submitPassword = async (password: string) => {
+    const file = locked[0];
+    if (!file) return;
+    setUnlock({ busy: true, error: null });
+    try {
+      const outcome = await api.unlockFile(file.id, password);
+      if (outcome.locked != null && !outcome.document) {
+        setUnlock({ busy: false, error: outcome.error ?? "Wrong password. Try again." });
+        return;
+      }
+      setLocked((q) => q.slice(1));
+      setUnlock({ busy: false, error: null });
+      addOutcomes([outcome], file.mode);
+    } catch (e) {
+      setLocked((q) => q.slice(1));
+      setUnlock({ busy: false, error: null });
+      notify(`${file.fileName}: ${errorMessage(e)}`, "error");
+    }
+  };
+  const cancelPassword = () => {
+    const file = locked[0];
+    if (!file) return;
+    api.discardLocked(file.id).catch(() => {});
+    setLocked((q) => q.slice(1));
+    setUnlock({ busy: false, error: null });
+  };
+
+  const openRecent = async (id: number) => {
+    try {
+      setBusy("Opening…");
+      addOutcomes([await api.openRecent(id)], "tabs");
+    } catch (e) {
+      notify(errorMessage(e), "error");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const openFiles = async (mode: "tabs" | "merge") => {
     try {
@@ -356,7 +416,7 @@ export default function App() {
       });
       if (saved) {
         tabsDispatch({ type: "edit", id: savingTab, action: { type: "markSaved" } });
-        notify(`Saved ${saved.path}`);
+        notify(saved.protected ? `Saved ${saved.path}. It opens with the same password.` : `Saved ${saved.path}`);
         for (const w of saved.warnings) notify(w, "error");
       }
     } catch (e) {
@@ -447,7 +507,8 @@ export default function App() {
       const target = e.target as HTMLElement;
       const typing = !!target.closest("input, textarea, select");
       const mod = e.ctrlKey || e.metaKey;
-      if (dialog) return;
+      // A dialog (including the password prompt) has the keyboard to itself.
+      if (dialog || locked.length) return;
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setDialog({ kind: "palette" });
@@ -460,15 +521,16 @@ export default function App() {
       } else if (mod && e.key.toLowerCase() === "w") {
         e.preventDefault();
         if (tabId) closeTab(tabId);
+      } else if (mod && e.key.toLowerCase() === "f") {
+        // Always taken, so the WebView's own find box never opens.
+        e.preventDefault();
+        openFind();
       } else if (mod && e.key === "Tab") {
         e.preventDefault();
         const next = neighbourTab(tabState, e.shiftKey ? -1 : 1);
         if (next) tabsDispatch({ type: "activate", id: next });
       } else if (typing || target.isContentEditable) {
         return;
-      } else if (mod && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        setSidebarCollapsed(!sidebarCollapsed);
       } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
@@ -506,13 +568,16 @@ export default function App() {
     const ids = new Set(ws.pages.map((p) => p.docId));
     return [...docs.values()].filter((d) => ids.has(d.docId));
   }, [docs, ws.pages]);
-  const soon = !!SECTION_INFO[section].soon;
 
   const openWatermark = () => setDialog({ kind: "watermark" });
   const openClean = () => setDialog({ kind: "clean", text: "", docIds: null });
+  /** Find works on the text of the file, so it lives in the read view. */
+  const openFind = () => {
+    if (!hasDoc) return;
+    if (section !== "read") navigate("read");
+    setFindRequest((n) => n + 1);
+  };
   const inGrid = section === "grid" && hasDoc;
-  const pageNumbers = selectedIds.map((id) => ws.pages.findIndex((p) => p.id === id) + 1);
-
   const ifDoc = (f: () => void) => (hasDoc ? f : undefined);
   const commands: Command[] = [
     { id: "open", title: "Open PDF", description: "Open one or more PDF files, each in its own tab", icon: "folderOpen", tag: "Action", shortcut: "Ctrl O", run: () => openFiles("tabs") },
@@ -520,50 +585,40 @@ export default function App() {
     { id: "close", title: "Close tab", description: "Close the current document", icon: "x", tag: "Action", shortcut: "Ctrl W", run: tabId ? () => closeTab(tabId) : undefined },
     { id: "next-tab", title: "Next tab", description: "Switch to the next open document", icon: "chevronRight", tag: "View", shortcut: "Ctrl Tab", run: tabState.tabs.length > 1 ? () => tabsDispatch({ type: "activate", id: neighbourTab(tabState, 1)! }) : undefined },
     { id: "save", title: "Save as new PDF", description: "Write the workspace to a new file", icon: "save", tag: "Action", shortcut: "Ctrl S", run: ifDoc(save) },
-    { id: "wm", title: "Watermark Studio: add a text stamp", description: "Text, typeface, size, angle and opacity on every page", icon: "stamp", tag: "Tool", run: ifDoc(openWatermark) },
-    { id: "clean", title: "Remove existing watermarks", description: "Scan for tagged stamps, watermark annotations and matching text", icon: "eraser", tag: "Tool", run: ifDoc(openClean) },
-    { id: "v-lib", title: "Go to Library & Recent", description: "Home: open files and quick actions", icon: "library", tag: "View", run: () => navigate("library") },
-    { id: "v-read", title: "Go to Document Workspace", description: "Read the whole document as one scroll", icon: "fileText", tag: "View", run: ifDoc(() => navigate("read")) },
-    { id: "v-grid", title: "Go to Page Organizer", description: "Reorder, rotate, delete and merge pages", icon: "grid", tag: "View", run: ifDoc(() => navigate("grid")) },
-    { id: "v-edit", title: "Go to Advanced Editor", description: "Edit text in place and add text boxes", icon: "edit", tag: "View", run: ifDoc(() => navigate("edit")) },
-    { id: "rot-r", title: "Rotate selected pages right", description: "Page Organizer · R", icon: "rotateRight", tag: "Action", run: inGrid && selectedIds.length ? () => rotateSelected(90) : undefined },
-    { id: "rot-l", title: "Rotate selected pages left", description: "Page Organizer · Shift R", icon: "rotateLeft", tag: "Action", run: inGrid && selectedIds.length ? () => rotateSelected(-90) : undefined },
-    { id: "del", title: "Delete selected pages", description: "Page Organizer · Del", icon: "trash", tag: "Action", run: inGrid && selectedIds.length ? deleteSelected : undefined },
+    { id: "wm", title: "Add or change the watermark", description: "Text on every page: typeface, size, angle and opacity", icon: "stamp", tag: "Tool", run: ifDoc(openWatermark) },
+    { id: "clean", title: "Remove existing watermarks", description: "Scan for tagged watermarks, watermark annotations and matching text", icon: "eraser", tag: "Tool", run: ifDoc(openClean) },
+    { id: "v-lib", title: "Go to the Library", description: "Home: open documents and quick actions", icon: "library", tag: "View", run: () => navigate("library") },
+    { id: "v-read", title: "Read", description: "Read and comment on the document", icon: "fileText", tag: "View", run: ifDoc(() => navigate("read")) },
+    { id: "v-grid", title: "Organize pages", description: "Reorder, rotate, delete and merge pages", icon: "grid", tag: "View", run: ifDoc(() => navigate("grid")) },
+    { id: "v-edit", title: "Edit", description: "Change text in place and add text boxes", icon: "edit", tag: "View", run: ifDoc(() => navigate("edit")) },
+    { id: "rot-r", title: "Rotate selected pages right", description: "Organize view · R", icon: "rotateRight", tag: "Action", run: inGrid && selectedIds.length ? () => rotateSelected(90) : undefined },
+    { id: "rot-l", title: "Rotate selected pages left", description: "Organize view · Shift R", icon: "rotateLeft", tag: "Action", run: inGrid && selectedIds.length ? () => rotateSelected(-90) : undefined },
+    { id: "del", title: "Delete selected pages", description: "Organize view · Del", icon: "trash", tag: "Action", run: inGrid && selectedIds.length ? deleteSelected : undefined },
     { id: "undo", title: "Undo", description: "Step back one change", icon: "undo", tag: "Action", shortcut: "Ctrl Z", run: history.past.length ? () => dispatch({ type: "undo" }) : undefined },
     { id: "redo", title: "Redo", description: "Step forward one change", icon: "redo", tag: "Action", shortcut: "Ctrl Y", run: history.future.length ? () => dispatch({ type: "redo" }) : undefined },
     { id: "sanitize", title: sanitize ? "Turn off sanitize on save" : "Turn on sanitize on save", description: "Strip scripts, launch links, media and attachments when saving", icon: "shield", tag: "Action", run: () => setSanitize(!sanitize) },
-    { id: "sidebar", title: sidebarCollapsed ? "Expand menu" : "Collapse menu", description: sidebarCollapsed ? "Show the full left menu" : "Shrink the left menu to icons for more room", icon: "panelLeft", tag: "View", shortcut: "Ctrl B", run: () => setSidebarCollapsed(!sidebarCollapsed) },
+    { id: "find", title: "Find in document", description: "Search the text of the document", icon: "search", tag: "Action", shortcut: "Ctrl F", run: ifDoc(openFind) },
     { id: "t-light", title: "Use light theme", description: theme === "light" ? "Current theme" : "Switch the interface to light", icon: "sun", tag: "View", run: theme === "light" ? undefined : () => setTheme("light") },
     { id: "t-dark", title: "Use dark theme", description: theme === "dark" ? "Current theme" : "Switch the interface to dark", icon: "moon", tag: "View", run: theme === "dark" ? undefined : () => setTheme("dark") },
     { id: "t-system", title: "Match system theme", description: theme === "system" ? "Current theme" : "Follow the Windows light/dark setting", icon: "monitor", tag: "View", run: theme === "system" ? undefined : () => setTheme("system") },
     { id: "update-check", title: "Check for updates", description: `Look for a newer version of ${APP_NAME}`, icon: "download", tag: "Action", run: checkForUpdates },
     { id: "update-install", title: update?.downloaded ? `Restart to install ${APP_NAME} ${update.version}` : `Install ${APP_NAME} ${update?.version ?? "update"}`, description: update?.downloaded ? `Install the downloaded update now instead of when ${APP_NAME} quits` : `Download the update and restart ${APP_NAME}`, icon: "download", tag: "Action", run: update ? installUpdate : undefined },
     { id: "update-auto", title: autoUpdate ? "Turn off automatic updates" : "Turn on automatic updates", description: autoUpdate ? "Check for and install updates yourself from this palette" : `Download updates in the background and install them when ${APP_NAME} quits`, icon: "download", tag: "Action", run: toggleAutoUpdate },
-    { id: "s-hl", title: "Highlight text", description: "Not available yet", icon: "highlighter", tag: "Soon" },
-    { id: "s-note", title: "Sticky note", description: "Not available yet", icon: "note", tag: "Soon" },
-    { id: "s-ink", title: "Freehand ink", description: "Not available yet", icon: "ink", tag: "Soon" },
-    { id: "s-redact", title: "Redact content", description: "Not available yet", icon: "redact", tag: "Soon" },
-    { id: "s-form", title: "Form fields", description: "Not available yet", icon: "form", tag: "Soon" },
-    { id: "s-sign", title: "Sign & protect", description: "Not available yet", icon: "shield", tag: "Soon" },
-    { id: "s-ocr", title: "OCR & export", description: "Not available yet", icon: "scan", tag: "Soon" },
-    { id: "s-compress", title: "Compress PDF", description: "Not available yet", icon: "compress", tag: "Soon" },
   ];
 
   return (
-    <div className={`app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
-      <Sidebar
-        section={section}
-        onNavigate={navigate}
-        sanitize={sanitize}
-        onSanitize={setSanitize}
-        theme={theme}
-        onTheme={setTheme}
-        collapsed={sidebarCollapsed}
-        onCollapsed={setSidebarCollapsed}
-      />
-
+    <div className="app">
       <div className="workspace">
         <header className="topbar">
+          <button
+            className={`brand-mark${section === "library" ? " current" : ""}`}
+            onClick={() => navigate("library")}
+            aria-label="Library"
+            aria-current={section === "library" ? "page" : undefined}
+            title={`${APP_NAME} library: open documents and quick actions`}
+          >
+            <Icon name="book" size={16} />
+          </button>
           <div className="tabs">
             {tabState.tabs.length > 0 ? (
               <div className="tab-list" role="tablist" aria-label="Open documents">
@@ -591,9 +646,11 @@ export default function App() {
             </button>
           </div>
           <div className="spacer" />
-          <button className="search-box" onClick={() => setDialog({ kind: "palette" })} title="Search tools and actions (Ctrl+K)">
-            <Icon name="search" size={16} />
-            <span>Search tools and actions…</span>
+          {tab && <ModeSwitch section={section} onNavigate={navigate} />}
+          <div className="spacer" />
+          <button className="search-box" onClick={() => setDialog({ kind: "palette" })} title="Run a command by name (Ctrl+K)">
+            <Icon name="zap" size={16} />
+            <span>Commands</span>
             <kbd>Ctrl K</kbd>
           </button>
           <div className="topbar-group">
@@ -604,6 +661,14 @@ export default function App() {
               <Icon name="redo" />
             </button>
           </div>
+          <SettingsMenu
+            sanitize={sanitize}
+            onSanitize={setSanitize}
+            recentEnabled={recent?.enabled ?? true}
+            onRecentEnabled={(on) => changeRecent(api.setRecentEnabled(on))}
+            theme={theme}
+            onTheme={setTheme}
+          />
           <button className="secondary" onClick={() => openFiles("tabs")} title="Open PDF (Ctrl+O)">
             <Icon name="folderOpen" size={16} /> Open
           </button>
@@ -618,7 +683,7 @@ export default function App() {
               <Fragment key={t.key}>
                 {i === 2 && <div className="sep" />}
                 <button
-                  className={`tool${t.gold ? " gold" : ""}${readTool === t.key ? " active" : ""}`}
+                  className={`tool${readTool === t.key ? " active" : ""}`}
                   aria-pressed={readTool === t.key}
                   onClick={() => setReadTool(t.key)}
                   title={t.title}
@@ -658,38 +723,36 @@ export default function App() {
               </span>
             )}
             <div className="sep" />
-            <button className="tool" onClick={() => navigate("edit")} title="Add or change text in the Advanced Editor">
-              <Icon name="type" /> Add Text
+            <button className={`tool${ws.watermark ? " active" : ""}`} onClick={openWatermark} title="Add or change the watermark">
+              <Icon name="stamp" /> Watermark
             </button>
-            <button className={`tool${ws.watermark ? " active" : ""}`} onClick={openWatermark} title="Watermark Studio">
-              <Icon name="stamp" /> Stamp
+            <button className="tool" onClick={openClean} title="Find and remove watermarks already in the file">
+              <Icon name="eraser" /> Remove watermarks
             </button>
-            <button className="tool" onClick={openClean} title="Remove existing watermarks">
-              <Icon name="eraser" /> Remove stamps
+            <div className="spacer" />
+            <button className={`tool${findRequest ? " active" : ""}`} onClick={openFind} aria-pressed={findRequest > 0} title="Find in document (Ctrl+F)">
+              <Icon name="search" /> Find
             </button>
           </nav>
         )}
 
         {inGrid && (
           <nav className="toolbar" aria-label="Selection tools">
-            <span className="group-label">Selection tools</span>
             <button className="tool" onClick={() => rotateSelected(-90)} disabled={!selectedIds.length} title="Rotate left (Shift+R)">
               <Icon name="rotateLeft" /> Rotate −90°
             </button>
             <button className="tool" onClick={() => rotateSelected(90)} disabled={!selectedIds.length} title="Rotate right (R)">
               <Icon name="rotateRight" /> Rotate +90°
             </button>
-            <button className="tool" disabled title="Coming soon">
-              <Icon name="copy" /> Duplicate
-            </button>
-            <button className="tool" disabled title="Coming soon">
-              <Icon name="download" /> Extract to new PDF
-            </button>
             <button className="tool" onClick={editSelected} disabled={!selectedIds.length} title="Edit page (Enter)">
               <Icon name="edit" /> Edit page
             </button>
             <button className="tool danger" onClick={deleteSelected} disabled={!selectedIds.length} title="Delete pages (Del)">
               <Icon name="trash" /> Delete{selectedIds.length ? ` (${selectedIds.length})` : ""}
+            </button>
+            <div className="sep" />
+            <button className="tool" onClick={() => setSelection(new Set())} disabled={!selectedIds.length} title="Clear the selection (Esc)">
+              Deselect all
             </button>
             <div className="spacer" />
             <label className="slider" title="Thumbnail size">
@@ -701,11 +764,13 @@ export default function App() {
         )}
 
         <main className="content">
-          {soon ? (
-            <ComingSoon section={section} />
-          ) : section === "library" ? (
+          {section === "library" ? (
             <Library
               docs={docsInUse}
+              recent={recent}
+              onOpenRecent={openRecent}
+              onRemoveRecent={(id) => changeRecent(api.removeRecent(id))}
+              onClearRecent={() => changeRecent(api.clearRecent())}
               pageCount={ws.pages.length}
               dirty={dirty}
               onOpen={() => openFiles("tabs")}
@@ -718,10 +783,10 @@ export default function App() {
             <div className="placeholder">
               <div className="placeholder-card">
                 <span className="tile-icon big">
-                  <Icon name={SECTION_INFO[section].icon} size={26} />
+                  <Icon name="fileText" size={26} />
                 </span>
-                <h1>{SECTION_INFO[section].label}</h1>
-                <p>Open a PDF to start. You can also drop PDF files anywhere in this window.</p>
+                <h1>No pages to show</h1>
+                <p>Open a PDF, or drop PDF files anywhere in this window.</p>
                 <button className="primary big" onClick={() => openFiles("tabs")}>
                   <Icon name="folderOpen" /> Open PDF…
                 </button>
@@ -745,6 +810,8 @@ export default function App() {
               onExitEdit={() => setSection("read")}
               onRemoveEverywhere={(text, docId) => setDialog({ kind: "clean", text, docIds: [docId] })}
               onWatermark={openWatermark}
+              findRequest={findRequest}
+              onFindClose={() => setFindRequest(0)}
               notify={notify}
             />
           ) : (
@@ -761,25 +828,7 @@ export default function App() {
                       {docsInUse.length > 1 ? ` · ${docsInUse.length} files` : ""}
                     </span>
                   </h1>
-                  <p>
-                    {selectedIds.length ? (
-                      <>
-                        <span className="dot gold" /> {selectedIds.length} page{selectedIds.length === 1 ? "" : "s"} selected
-                        <span className="muted"> — ready for batch operations</span>
-                      </>
-                    ) : (
-                      <span className="muted">Drag pages to reorder. Ctrl-click to add to the selection, Shift-click for a range.</span>
-                    )}
-                  </p>
-                </div>
-                <div className="spacer" />
-                <div className="segmented" role="radiogroup" aria-label="Layout">
-                  <button className="active" role="radio" aria-checked="true">
-                    <Icon name="grid" size={15} /> Manual reorder
-                  </button>
-                  <button role="radio" aria-checked="false" disabled title="Coming soon">
-                    <Icon name="book" size={15} /> Booklet flow
-                  </button>
+                  <p className="muted">Drag pages to reorder. Ctrl-click to add to the selection, Shift-click for a range.</p>
                 </div>
               </div>
               <PageGrid
@@ -793,27 +842,6 @@ export default function App() {
                 onMove={(ids, overId) => dispatch({ type: "move", ids, overId })}
                 onOpenEditor={(id) => openInDocument(id, "edit")}
               />
-              {selectedIds.length > 0 && (
-                <div className="selection-bar" role="region" aria-label="Selection">
-                  <span className="dot primary" />
-                  <span className="sel-count">
-                    {selectedIds.length} page{selectedIds.length === 1 ? "" : "s"} selected
-                  </span>
-                  <span className="sel-meta">
-                    Pages: {pageNumbers.length > 8 ? `${pageNumbers.slice(0, 8).join(", ")}…` : pageNumbers.join(", ")}
-                  </span>
-                  <div className="spacer" />
-                  <button className="secondary" onClick={() => setSelection(new Set())}>
-                    Deselect all
-                  </button>
-                  <button className="secondary" onClick={() => rotateSelected(90)}>
-                    <Icon name="rotateRight" size={16} /> Rotate
-                  </button>
-                  <button className="primary" onClick={editSelected}>
-                    <Icon name="edit" size={16} /> Edit page
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </main>
@@ -848,12 +876,6 @@ export default function App() {
               <span className="spinner" /> {busy}
             </span>
           )}
-          {sanitize && hasDoc && (
-            <span className="secure" title="Risky actions, media and attachments are stripped on save">
-              <Icon name="shield" size={12} /> Sanitize on
-            </span>
-          )}
-          <span className="engine">PDFium · sandboxed</span>
         </footer>
       </div>
 
@@ -879,6 +901,17 @@ export default function App() {
         />
       )}
       {dialog?.kind === "palette" && <CommandPalette commands={commands} onClose={() => setDialog(null)} />}
+      {locked.length > 0 && (
+        <PasswordDialog
+          key={locked[0].id}
+          fileName={locked[0].fileName}
+          error={unlock.error}
+          busy={unlock.busy}
+          waiting={locked.length - 1}
+          onSubmit={submitPassword}
+          onCancel={cancelPassword}
+        />
+      )}
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       {dragging && (
         <div className="drop-overlay" role="status" aria-live="polite">
@@ -922,6 +955,11 @@ function DocTab(props: {
     >
       <Icon name="fileText" size={16} />
       <span className="name">{tab.title}</span>
+      {props.docs.get(tab.docId)?.protected && (
+        <span className="tab-lock" title="Password-protected. A save keeps the password." aria-label="Password-protected">
+          <Icon name="lock" size={12} />
+        </span>
+      )}
       {merged > 0 && <span className="count">+{merged}</span>}
       {isDirty(tab) && <span className="dirty-dot" title="Unsaved changes" />}
       <button

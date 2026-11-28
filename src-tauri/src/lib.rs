@@ -1,6 +1,7 @@
 mod commands;
 pub mod geometry;
 mod host;
+mod recent;
 pub mod protocol;
 pub mod sandbox;
 pub mod shared;
@@ -15,6 +16,16 @@ use tauri::{DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, W
 
 use crate::commands::{launch_paths, AppState};
 use crate::host::Pool;
+
+/// Where the recent files list is stored: the app's data folder. Debug builds only:
+/// NOVAPDF_DEV_DATA_DIR puts it elsewhere, so E2E tests never touch the developer's own list.
+fn recent_file(app: &tauri::App) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    if let Some(dir) = std::env::var_os("NOVAPDF_DEV_DATA_DIR").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(dir).join("recent.json"));
+    }
+    app.path().app_data_dir().ok().map(|d| d.join("recent.json"))
+}
 
 /// Only the app's own pages may load in the webview; links can never navigate it.
 fn is_app_url(url: &Url) -> bool {
@@ -65,7 +76,7 @@ pub fn run() {
         .setup(|app| {
             // The PDFium library is bundled as a resource under `pdfium/`.
             let lib_dir = app.path().resource_dir().ok().map(|dir| dir.join("pdfium"));
-            app.manage(AppState::new(Pool::new(lib_dir)?));
+            app.manage(AppState::new(Pool::new(lib_dir)?, recent_file(app)));
 
             // Files the OS launched us with (a double-clicked PDF). The UI takes them
             // with `take_launch_files` once it has loaded.
@@ -151,6 +162,13 @@ pub fn run() {
             commands::open_dropped,
             commands::take_launch_files,
             commands::close_document,
+            commands::list_recent,
+            commands::open_recent,
+            commands::remove_recent,
+            commands::clear_recent,
+            commands::set_recent_enabled,
+            commands::unlock_file,
+            commands::discard_locked,
             commands::render_page,
             commands::extract_page,
             commands::find_watermarks,

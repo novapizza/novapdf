@@ -1,19 +1,18 @@
 import { FIXTURES } from "./paths";
 import type { Page } from "@playwright/test";
-import { expect, statusBar, test, toast } from "./app";
+import { expect, statusBar, test, toast, showView } from "./app";
 
 const docTabs = (page: Page) => page.getByRole("tablist", { name: "Open documents" }).getByRole("tab");
 
 test.use({ appOptions: { grants: [FIXTURES.sample, FIXTURES.second, FIXTURES.notPdf] } });
 
-test("starts in the library with the sandboxed engine", async ({ app }) => {
+test("starts in the library with nothing open", async ({ app }) => {
   const { page } = app;
   await expect(page).toHaveTitle("NovaQuire");
-  await expect(page.getByRole("heading", { name: /Document Library/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
   await expect(page.getByText("No document open")).toBeVisible();
-  await expect(statusBar(page)).toContainText("PDFium · sandboxed");
   // Real backend: the font list comes from the system.
-  await page.getByRole("button", { name: /Search tools and actions/ }).click();
+  await page.getByRole("button", { name: /Commands/ }).click();
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   await page.keyboard.press("Escape");
 });
@@ -87,7 +86,7 @@ test("Merge appends another file to the current tab", async ({ app }) => {
   await app.drop([FIXTURES.sample]);
   await expect(statusBar(page)).toContainText("of 3");
   app.pick([FIXTURES.second]);
-  await page.getByRole("button", { name: /Search tools and actions/ }).click();
+  await page.getByRole("button", { name: /Commands/ }).click();
   await page.getByText("Merge PDFs into this document").click();
   await expect(toast(page, "Merged second.pdf (2 pages)")).toBeVisible();
   await expect(statusBar(page)).toContainText("of 5");
@@ -119,33 +118,63 @@ test("clicking a tab from the library opens its document", async ({ app }) => {
   app.pick([FIXTURES.sample, FIXTURES.second]);
   await page.getByRole("button", { name: /^Open$/ }).click();
   await expect(docTabs(page)).toHaveCount(2);
-  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: /Library/ }).click();
-  await expect(page.getByRole("heading", { name: /Document Library/ })).toBeVisible();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
   await docTabs(page).filter({ hasText: "sample.pdf" }).click();
   await expect(page.getByRole("navigation", { name: "Reader tools" })).toBeVisible();
   await expect(statusBar(page)).toContainText("Page 1 of 3");
   await expect(page.getByAltText("Page 1")).toBeVisible();
 });
 
-test("collapsing the left menu gives the page more room", async ({ app }) => {
+test("the view switch moves between reading, organizing and editing", async ({ app }) => {
+  const { page } = app;
+  // No document, no views to switch between.
+  await expect(page.getByRole("radiogroup", { name: "View" })).toHaveCount(0);
+  await app.drop([FIXTURES.sample]);
+  await expect(page.getByAltText("Page 1")).toBeVisible();
+  const view = page.getByRole("radiogroup", { name: "View" });
+  await expect(view.getByRole("radio", { name: "Read" })).toBeChecked();
+
+  await showView(page, "Organize");
+  await expect(page.getByRole("navigation", { name: "Selection tools" })).toBeVisible();
+  await showView(page, "Edit");
+  await expect(page.getByRole("radiogroup", { name: "Edit tool" })).toBeVisible();
+  await showView(page, "Read");
+  await expect(page.getByRole("navigation", { name: "Reader tools" })).toBeVisible();
+});
+
+test("settings: sanitize and theme live in the top-bar popover", async ({ app }) => {
+  const { page } = app;
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await expect(settings.getByRole("checkbox", { name: "Sanitize on save" })).toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: "Remember recent files" })).toBeChecked();
+  await settings.getByRole("radio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await settings.getByRole("radio", { name: "Light" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  // Back to the default, so later tests start from it.
+  await settings.getByRole("radio", { name: "System" }).click();
+  await page.keyboard.press("Escape");
+  await expect(settings).toHaveCount(0);
+});
+
+test("Ctrl+F finds text in the document with real PDFium text", async ({ app }) => {
   const { page } = app;
   await app.drop([FIXTURES.sample]);
-  const img = page.getByAltText("Page 1");
-  await expect(img).toBeVisible();
-  const workspace = page.locator(".workspace");
-  const before = (await workspace.boundingBox())!.width;
-
-  await page.getByRole("button", { name: "Collapse menu" }).click();
-  await expect(page.getByRole("button", { name: "Expand menu" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Workspaces" }).getByText("Page Organizer")).toBeHidden();
-  await expect.poll(async () => (await workspace.boundingBox())!.width).toBeGreaterThan(before + 150);
-  // Icons still navigate.
-  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: /Page Organizer/ }).click();
-  await expect(page.getByRole("navigation", { name: "Selection tools" })).toBeVisible();
-
-  await page.keyboard.press("Control+B");
-  await expect(page.getByRole("button", { name: "Collapse menu" })).toBeVisible();
-  await expect.poll(async () => (await workspace.boundingBox())!.width).toBeLessThan(before + 1);
+  await expect(page.getByAltText("Page 1")).toBeVisible();
+  await page.keyboard.press("Control+F");
+  const box = page.getByRole("textbox", { name: "Find in document" });
+  await expect(box).toBeFocused();
+  // Case does not matter, and the phrase is found on page 1.
+  await box.fill("QUARTERLY field");
+  await expect(page.locator(".find-status")).toHaveText(/^1 of \d+$/);
+  await expect(page.locator('.page-surface[data-page="1"] .find-hit.active')).not.toHaveCount(0);
+  await box.fill("no such words here");
+  await expect(page.locator(".find-status")).toHaveText("No results");
+  await expect(page.locator(".find-hit")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(box).toHaveCount(0);
 });
 
 test("rejects a file that is not a PDF", async ({ app }) => {

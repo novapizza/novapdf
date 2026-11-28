@@ -200,12 +200,34 @@ export interface OpenedDocument {
   docId: DocId;
   fileName: string;
   pages: PageInfo[];
+  /** Opened with a password; a save keeps it. */
+  protected?: boolean;
 }
 
 export interface OpenOutcome {
   fileName: string;
   document: OpenedDocument | null;
   error: string | null;
+  /** The file needs a password: send it with this id (`api.unlockFile`). With `error`
+   *  set too, the password just tried was wrong. */
+  locked?: number;
+}
+
+/** The recent files list (src-tauri/src/recent.rs). No paths: entries open by id. */
+export interface RecentView {
+  /** Off: nothing is recorded, and the list is empty. */
+  enabled: boolean;
+  /** Newest first. */
+  items: RecentItem[];
+}
+
+export interface RecentItem {
+  id: number;
+  fileName: string;
+  /** The folder the file is in, for display only. */
+  folder: string;
+  /** Milliseconds since the Unix epoch. */
+  openedAt: number;
 }
 
 export interface LayoutResult {

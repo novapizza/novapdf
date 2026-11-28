@@ -373,6 +373,73 @@ fn worker_opens_documents_from_shared_memory() {
     let _ = w.child.kill();
 }
 
+/// `sample_pdf()` protected with an open password, using the older RC4 128-bit
+/// encryption (security handler revision 3) that most protected files in the wild use.
+fn protected_sample(password: &str) -> Vec<u8> {
+    use lopdf::{Document, EncryptionState, EncryptionVersion, Object, Permissions};
+    let mut doc = Document::load_mem(&sample_pdf()).unwrap();
+    let id = Object::string_literal(b"0123456789abcdef".to_vec());
+    doc.trailer.set("ID", vec![id.clone(), id]);
+    let state = EncryptionState::try_from(EncryptionVersion::V2 {
+        document: &doc,
+        owner_password: "owner-only",
+        user_password: password,
+        key_length: 128,
+        permissions: Permissions::all(),
+    })
+    .unwrap();
+    doc.encrypt(&state).unwrap();
+    let mut out = Vec::new();
+    doc.save_to(&mut out).unwrap();
+    out
+}
+
+#[test]
+fn worker_opens_password_protected_files_and_saves_them_protected() {
+    let mut w = Worker::start();
+    let locked = protected_sample("open sesame");
+    let needs = novapdf_lib::protocol::NEEDS_PASSWORD;
+
+    // No password, or the wrong one: the host is told a password is needed.
+    assert_eq!(w.err(json!({"op": "open", "docId": 1}), &locked), needs);
+    assert_eq!(w.err(json!({"op": "open", "docId": 1, "password": "nope"}), &locked), needs);
+    // A password with a NUL is refused before PDFium sees it.
+    assert_eq!(w.err(json!({"op": "open", "docId": 1, "password": "open\u{0}sesame"}), &locked), "That password is not valid.");
+
+    let (pages, _) = w.ok(json!({"op": "open", "docId": 1, "password": "open sesame"}), &locked);
+    assert_eq!(pages, json!([{"width": 612.0, "height": 792.0}]));
+    let (text, _) = w.ok(json!({"op": "extract", "docId": 1, "pageIndex": 0}), &[]);
+    assert!(text["paragraphs"].to_string().contains("Hello worker"));
+
+    // Saved with AES-256 and the same password.
+    let key: Vec<u8> = (0..32).collect();
+    let (_, saved) = w.ok(
+        json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0}], "watermark": null, "sanitize": true,
+               "encrypt": {"password": "open sesame", "key": key}}),
+        &[],
+    );
+    assert!(saved.starts_with(b"%PDF-"));
+    assert!(!saved.windows(12).any(|w| w == b"Hello worker"), "the saved text is encrypted");
+    assert_eq!(w.err(json!({"op": "open", "docId": 2}), &saved), needs);
+    let (pages, _) = w.ok(json!({"op": "open", "docId": 2, "password": "open sesame"}), &saved);
+    assert_eq!(pages.as_array().unwrap().len(), 1);
+    let (text, _) = w.ok(json!({"op": "extract", "docId": 2, "pageIndex": 0}), &[]);
+    assert!(text["paragraphs"].to_string().contains("Hello worker"));
+
+    // Without `encrypt`, a save is plain, as before.
+    let (_, plain) = w.ok(json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0}], "watermark": null, "sanitize": true}), &[]);
+    w.ok(json!({"op": "open", "docId": 3}), &plain);
+
+    // Bad encryption settings are refused in the worker too.
+    assert_eq!(
+        w.err(json!({"op": "save", "pages": [{"docId": 1, "pageIndex": 0}], "watermark": null, "sanitize": true,
+                     "encrypt": {"password": "x", "key": [1, 2, 3]}}), &[]),
+        "The encryption key is invalid."
+    );
+
+    let _ = w.child.kill();
+}
+
 /// macOS: what the worker's sandbox blocks. The checks must run inside a sandboxed
 /// process, and entering the sandbox cannot be undone, so this test re-runs itself as
 /// a child (`PROBE`) that enters it and reports back through its exit status.

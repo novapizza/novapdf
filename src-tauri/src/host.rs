@@ -11,6 +11,10 @@
 //! worker holding documents is stopped once it has been idle for a while
 //! (`trim_idle`). Both are cheap: a replacement maps the shared bytes again and
 //! PDFium parses lazily.
+//!
+//! Passwords: a document opened with a password keeps it here, in memory only and
+//! only while the document is open, because any worker may have to load the file again.
+//! It is never written to disk, and is overwritten when the document closes.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -89,6 +93,7 @@ pub struct Pool {
     lib_dir: Option<PathBuf>,
     workers: Vec<Mutex<Slot>>,
     docs: RwLock<HashMap<DocId, Arc<DocBytes>>>,
+    passwords: RwLock<HashMap<DocId, Password>>,
     next_doc: AtomicU32,
     next_bg: AtomicUsize,
     #[cfg(target_os = "macos")]
@@ -105,6 +110,7 @@ impl Pool {
             lib_dir,
             workers: (0..count).map(|_| Mutex::new(Slot::default())).collect(),
             docs: RwLock::new(HashMap::new()),
+            passwords: RwLock::new(HashMap::new()),
             next_doc: AtomicU32::new(1),
             next_bg: AtomicUsize::new(0),
             #[cfg(target_os = "macos")]
@@ -222,9 +228,10 @@ impl Pool {
         id: DocId,
         bytes: &DocBytes,
     ) -> Result<(serde_json::Value, Vec<u8>), String> {
+        let password = self.password_of(id);
         match bytes {
             DocBytes::Owned(v) => {
-                self.exchange(slot, &Request::Open { doc_id: id }, v, OPEN_TIMEOUT).await
+                self.exchange(slot, &Request::Open { doc_id: id, password }, v, OPEN_TIMEOUT).await
             }
             #[cfg(windows)]
             DocBytes::Shared(section) => {
@@ -235,7 +242,7 @@ impl Pool {
                     .and_then(|p| p.child.raw_handle())
                     .ok_or("PDF engine exited")?;
                 let handle = section.share_with(process as _)?;
-                let req = Request::OpenShared { doc_id: id, handle, len: section.len() as u64 };
+                let req = Request::OpenShared { doc_id: id, handle, len: section.len() as u64, password };
                 self.exchange(slot, &req, &[], OPEN_TIMEOUT).await
             }
         }
@@ -366,9 +373,19 @@ impl Pool {
         killed
     }
 
+    /// The password a document was opened with, if it needed one.
+    pub fn password_of(&self, id: DocId) -> Option<String> {
+        self.passwords.read().unwrap().get(&id).map(|p| p.0.clone())
+    }
+
     /// Registers a document's bytes and parses it in the interactive worker.
-    pub async fn open(&self, bytes: Vec<u8>) -> Result<(DocId, Vec<PageInfo>), String> {
+    /// `password` opens a protected file; a file that needs one and did not get it (or
+    /// got the wrong one) fails with `protocol::NEEDS_PASSWORD`.
+    pub async fn open(&self, bytes: Vec<u8>, password: Option<String>) -> Result<(DocId, Vec<PageInfo>), String> {
         let id = self.next_doc.fetch_add(1, Ordering::Relaxed);
+        if let Some(p) = password {
+            self.passwords.write().unwrap().insert(id, Password(p));
+        }
         // Copying into shared memory touches every byte; keep it off the async threads.
         let bytes = tokio::task::spawn_blocking(move || Arc::new(DocBytes::new(bytes)))
             .await
@@ -389,6 +406,7 @@ impl Pool {
             Err(e) => {
                 drop(slot);
                 self.docs.write().unwrap().remove(&id);
+                self.passwords.write().unwrap().remove(&id);
                 Err(e)
             }
         }
@@ -396,6 +414,7 @@ impl Pool {
 
     pub async fn close(&self, id: DocId) {
         self.docs.write().unwrap().remove(&id);
+        self.passwords.write().unwrap().remove(&id);
         for w in &self.workers {
             let mut slot = w.lock().await;
             Self::reap(&mut slot);
@@ -405,6 +424,16 @@ impl Pool {
                     .await;
             }
         }
+    }
+}
+
+/// A document's password, overwritten in memory when it is dropped.
+struct Password(String);
+
+impl Drop for Password {
+    fn drop(&mut self) {
+        // SAFETY: zero bytes are valid UTF-8, so the string stays well-formed.
+        unsafe { self.0.as_mut_vec().fill(0) };
     }
 }
 

@@ -10,6 +10,7 @@
 pub mod annots;
 pub mod content;
 pub mod edit;
+pub mod encrypt;
 pub mod extract;
 pub mod fonts;
 pub mod outline;
@@ -90,11 +91,20 @@ fn serve(lib: &Lib) -> i32 {
 
 type Reply = Result<(serde_json::Value, Vec<u8>), String>;
 
-fn open<'l>(lib: &'l Lib, docs: &mut HashMap<DocId, Doc<'l>>, doc_id: DocId, bytes: Backing) -> Reply {
+fn open<'l>(
+    lib: &'l Lib,
+    docs: &mut HashMap<DocId, Doc<'l>>,
+    doc_id: DocId,
+    bytes: Backing,
+    password: Option<&str>,
+) -> Reply {
     if docs.len() >= MAX_OPEN_DOCS && !docs.contains_key(&doc_id) {
         return Err("Too many open documents".into());
     }
-    let doc = Doc::load_from(lib, bytes)?;
+    if let Some(p) = password {
+        crate::protocol::validate_password(p)?;
+    }
+    let doc = Doc::load_from(lib, bytes, password)?;
     let count = doc.page_count();
     if count <= 0 {
         return Err("This PDF has no pages.".into());
@@ -123,18 +133,18 @@ fn handle<'l>(
     payload: Vec<u8>,
 ) -> Reply {
     match req {
-        Request::Open { doc_id } => open(lib, docs, doc_id, Backing::Owned(payload)),
-        Request::OpenShared { doc_id, handle, len } => {
+        Request::Open { doc_id, password } => open(lib, docs, doc_id, Backing::Owned(payload), password.as_deref()),
+        Request::OpenShared { doc_id, handle, len, password } => {
             #[cfg(windows)]
             {
                 // SAFETY: the host duplicated this section handle into our process for
                 // this request; `View::open` closes it.
                 let view = unsafe { crate::shared::win::View::open(handle, len) }?;
-                open(lib, docs, doc_id, Backing::Mapped(view))
+                open(lib, docs, doc_id, Backing::Mapped(view), password.as_deref())
             }
             #[cfg(not(windows))]
             {
-                let _ = (doc_id, handle, len);
+                let _ = (doc_id, handle, len, password);
                 Err("Shared documents are not supported on this platform".into())
             }
         }
@@ -177,9 +187,16 @@ fn handle<'l>(
             let doc = docs.get(&doc_id).ok_or("Document is not open")?;
             json(outline::list(doc))
         }
-        Request::Save { pages, watermark, sanitize } => {
+        Request::Save { pages, watermark, sanitize, encrypt } => {
+            if let Some(e) = &encrypt {
+                e.validate()?;
+            }
             let saved = edit::save(lib, docs, &pages, watermark.as_ref(), sanitize, fonts)?;
-            Ok((serde_json::json!({ "warnings": saved.warnings }), saved.bytes))
+            let bytes = match &encrypt {
+                Some(e) => encrypt::encrypt(&saved.bytes, &e.password, &e.key)?,
+                None => saved.bytes,
+            };
+            Ok((serde_json::json!({ "warnings": saved.warnings }), bytes))
         }
         Request::Layout(args) => {
             args.validate()?;

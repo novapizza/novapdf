@@ -5,6 +5,7 @@ import type {
   LayoutResult,
   OpenOutcome,
   Outline,
+  RecentView,
   PageAnnots,
   PageEdits,
   PageText,
@@ -34,6 +35,19 @@ export const api = {
   takeLaunchFiles: () => invoke<string[]>("take_launch_files"),
   closeDocument: (docId: DocId) => invoke<void>("close_document", { docId }),
 
+  /** Recently opened files. Entries open by id; the UI never sees a path it could send. */
+  listRecent: () => invoke<RecentView>("list_recent"),
+  openRecent: (id: number) => invoke<OpenOutcome>("open_recent", { id }),
+  removeRecent: (id: number) => invoke<RecentView>("remove_recent", { id }),
+  clearRecent: () => invoke<RecentView>("clear_recent"),
+  /** Off also clears the list. */
+  setRecentEnabled: (enabled: boolean) => invoke<RecentView>("set_recent_enabled", { enabled }),
+
+  /** Opens a file that needs a password, by the id its open outcome gave. */
+  unlockFile: (lockedId: number, password: string) => invoke<OpenOutcome>("unlock_file", { lockedId, password }),
+  /** The user chose not to enter the password. */
+  discardLocked: (lockedId: number) => invoke<void>("discard_locked", { lockedId }),
+
   async renderPage(req: RenderRequest): Promise<Blob> {
     const args = { ...req, edits: req.edits && !editsAreEmpty(req.edits) ? req.edits : null };
     const bytes = await invoke<ArrayBuffer>("render_page", { args });
@@ -61,7 +75,7 @@ export const api = {
     watermark: Watermark | null;
     sanitize: boolean;
     suggestedName: string;
-  }) => invoke<{ path: string; warnings: string[] } | null>("save_with_dialog", { args }),
+  }) => invoke<{ path: string; warnings: string[]; protected?: boolean } | null>("save_with_dialog", { args }),
 
   layoutText: (args: {
     text: string;

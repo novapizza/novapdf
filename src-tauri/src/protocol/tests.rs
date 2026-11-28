@@ -205,8 +205,8 @@ fn page(doc_id: DocId) -> OutputPage {
 
 #[test]
 fn doc_ids_per_request() {
-    assert!(Request::Open { doc_id: 3 }.doc_ids().is_empty());
-    assert!(Request::OpenShared { doc_id: 3, handle: 1, len: 1 }.doc_ids().is_empty());
+    assert!(Request::Open { doc_id: 3, password: None }.doc_ids().is_empty());
+    assert!(Request::OpenShared { doc_id: 3, handle: 1, len: 1, password: None }.doc_ids().is_empty());
     assert!(Request::Close { doc_id: 3 }.doc_ids().is_empty());
     assert!(Request::Layout(layout_args()).doc_ids().is_empty());
     let render = Request::Render {
@@ -345,9 +345,10 @@ fn doc_ids_save_sorted_and_deduplicated() {
         pages: vec![page(9), page(2), page(9), page(5), page(2)],
         watermark: None,
         sanitize: true,
+        encrypt: None,
     };
     assert_eq!(save.doc_ids(), [2, 5, 9]);
-    let empty = Request::Save { pages: vec![], watermark: None, sanitize: false };
+    let empty = Request::Save { pages: vec![], watermark: None, sanitize: false, encrypt: None };
     assert!(empty.doc_ids().is_empty());
 }
 
@@ -630,9 +631,13 @@ fn results_serialize_with_ts_field_names() {
 #[test]
 fn request_tags_use_op_names() {
     let cases = [
-        (Request::Open { doc_id: 1 }, json!({"op": "open", "docId": 1})),
+        (Request::Open { doc_id: 1, password: None }, json!({"op": "open", "docId": 1})),
         (
-            Request::OpenShared { doc_id: 1, handle: 0x1a4, len: 4096 },
+            Request::Open { doc_id: 1, password: Some("pw".into()) },
+            json!({"op": "open", "docId": 1, "password": "pw"}),
+        ),
+        (
+            Request::OpenShared { doc_id: 1, handle: 0x1a4, len: 4096, password: None },
             json!({"op": "openShared", "docId": 1, "handle": 0x1a4, "len": 4096}),
         ),
         (Request::Close { doc_id: 2 }, json!({"op": "close", "docId": 2})),
@@ -662,7 +667,7 @@ fn request_tags_use_op_names() {
         "op": "save", "pages": [{"docId": 1, "pageIndex": 0}], "watermark": null, "sanitize": true
     }))
     .unwrap();
-    assert!(matches!(save, Request::Save { sanitize: true, .. }));
+    assert!(matches!(save, Request::Save { sanitize: true, encrypt: None, .. }));
 
     // Layout is a newtype variant: its fields sit next to the tag.
     let v = serde_json::to_value(Request::Layout(layout_args())).unwrap();
@@ -717,4 +722,35 @@ fn outline_uses_the_ui_json_shape() {
         v,
         serde_json::json!({ "items": [{ "title": "Intro", "depth": 1, "pageIndex": 0, "y": 10.0, "open": true }], "truncated": true })
     );
+}
+
+// ---------- passwords ----------
+
+#[test]
+fn passwords_are_checked() {
+    assert!(validate_password("open sesame").is_ok());
+    assert!(validate_password(&"x".repeat(MAX_PASSWORD_BYTES)).is_ok());
+    assert_eq!(validate_password("").unwrap_err(), "Enter the password.");
+    assert!(validate_password(&"x".repeat(MAX_PASSWORD_BYTES + 1)).is_err());
+    // PDFium reads a C string: a NUL would cut the password short.
+    assert!(validate_password("ab\0cd").is_err());
+}
+
+#[test]
+fn encrypt_settings_are_checked_and_never_printed() {
+    let good = Encrypt { password: "pw".into(), key: vec![7; 32] };
+    assert!(good.validate().is_ok());
+    assert!(Encrypt { password: String::new(), key: vec![7; 32] }.validate().is_err());
+    assert_eq!(Encrypt { password: "pw".into(), key: vec![7; 31] }.validate().unwrap_err(), "The encryption key is invalid.");
+    assert_eq!(format!("{good:?}"), "Encrypt { .. }");
+
+    // On the wire: the save request carries it only when set.
+    let save = Request::Save { pages: vec![], watermark: None, sanitize: true, encrypt: Some(good) };
+    let v = serde_json::to_value(&save).unwrap();
+    assert_eq!(v["encrypt"]["password"], "pw");
+    assert_eq!(v["encrypt"]["key"].as_array().unwrap().len(), 32);
+    let back: Request = serde_json::from_value(v).unwrap();
+    assert!(matches!(back, Request::Save { encrypt: Some(_), .. }));
+    let plain = serde_json::to_value(Request::Save { pages: vec![], watermark: None, sanitize: true, encrypt: None }).unwrap();
+    assert!(plain.get("encrypt").is_none());
 }

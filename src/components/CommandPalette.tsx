@@ -6,9 +6,9 @@ export interface Command {
   title: string;
   description: string;
   icon: IconName;
-  tag: "Action" | "Tool" | "View" | "Soon";
+  tag: "Action" | "Tool" | "View";
   shortcut?: string;
-  /** Missing when the command cannot run right now (no document, not built yet). */
+  /** Missing when the command cannot run right now (no document, nothing selected). */
   run?: () => void;
 }
 
@@ -62,14 +62,14 @@ export function CommandPalette(props: { commands: Command[]; onClose: () => void
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tools and actions…"
+            placeholder="Type a command…"
             aria-label="Search commands"
             autoFocus
           />
           <kbd>Esc</kbd>
         </div>
         <div className="palette-head">
-          <span>Commands &amp; studio tools ({matches.length})</span>
+          <span>Commands ({matches.length})</span>
         </div>
         <div className="palette-list" ref={listRef} role="listbox">
           {matches.length === 0 && <div className="palette-empty">No matching commands.</div>}

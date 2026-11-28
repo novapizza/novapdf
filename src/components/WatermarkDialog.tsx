@@ -86,14 +86,14 @@ export function WatermarkDialog(props: {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && props.onClose()}>
-      <div className="modal studio" role="dialog" aria-label="Watermark Studio">
+      <div className="modal studio" role="dialog" aria-label="Watermark">
         <header className="studio-head">
           <span className="tile-icon">
             <Icon name="shield" />
           </span>
           <div>
-            <h2>Watermark Studio</h2>
-            <p>A vector text stamp drawn on every page. Tagged as a PDF watermark, so it can be removed later.</p>
+            <h2>Watermark</h2>
+            <p>Text drawn on every page. It is tagged as a PDF watermark, so it can be removed later.</p>
           </div>
           <div className="spacer" />
           <button className="ghost icon-btn" onClick={props.onClose} aria-label="Close" title="Close (Esc)">
@@ -105,7 +105,7 @@ export function WatermarkDialog(props: {
           <div className="studio-form">
             <section>
               <div className="studio-label">
-                <span>Stamp inscription</span>
+                <span>Text</span>
                 <button className="link" onClick={() => set({ text: "" })}>
                   Clear
                 </button>
@@ -124,23 +124,6 @@ export function WatermarkDialog(props: {
                     {t}
                   </button>
                 ))}
-              </div>
-            </section>
-
-            <section>
-              <div className="studio-label">
-                <span>Layout topology</span>
-              </div>
-              <div className="topology">
-                <button className="topo active" aria-pressed="true">
-                  <Icon name="diagonal" /> Centered stamp
-                </button>
-                <button className="topo" disabled title="Coming soon">
-                  <Icon name="grid" /> Tile matrix
-                </button>
-                <button className="topo" disabled title="Coming soon">
-                  <Icon name="perimeter" /> Perimeter seal
-                </button>
               </div>
             </section>
 
@@ -176,10 +159,10 @@ export function WatermarkDialog(props: {
             </section>
 
             <section className="studio-sliders">
-              <Slider label="Stamp size" value={wm.size} unit="pt" min={8} max={200} onChange={(v) => set({ size: v })} />
-              <Slider label="Rotation angle" value={wm.angle} unit="°" min={-90} max={90} onChange={(v) => set({ angle: v })} />
+              <Slider label="Size" value={wm.size} unit="pt" min={8} max={200} onChange={(v) => set({ size: v })} />
+              <Slider label="Angle" value={wm.angle} unit="°" min={-90} max={90} onChange={(v) => set({ angle: v })} />
               <Slider
-                label="Ink density / opacity"
+                label="Opacity"
                 value={Math.round(wm.opacity * 100)}
                 unit="%"
                 min={5}
@@ -190,7 +173,7 @@ export function WatermarkDialog(props: {
 
             <section>
               <div className="studio-label">
-                <span>Pigment palette</span>
+                <span>Colour</span>
               </div>
               <div className="swatches">
                 {PIGMENTS.map((p) => (
@@ -216,8 +199,7 @@ export function WatermarkDialog(props: {
 
           <div className="studio-preview">
             <div className="studio-label">
-              <span>Live viewport</span>
-              <span className="mono">{props.previewPage ? `PDFium · 420 px` : ""}</span>
+              <span>Preview</span>
             </div>
             <div className="preview">
               {preview ? <img src={preview} alt="Watermark preview" /> : <div className="thumb-placeholder" />}

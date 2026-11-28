@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ComingSoon, EmptyNote, Library, SECTION_INFO, Sidebar, TIP_DELAY_MS, paperName } from "./Shell";
+import { EmptyNote, Library, ModeSwitch, SettingsMenu, paperName } from "./Shell";
 import { Toasts } from "./Toasts";
 import { Icon } from "./Icon";
 import { doc } from "../test/fixtures";
+import type { RecentView } from "../lib/types";
 
 describe("paperName", () => {
   it.each([
@@ -22,113 +23,78 @@ describe("paperName", () => {
   });
 });
 
-describe("Sidebar", () => {
-  const props = () => ({
-    section: "library" as const,
-    onNavigate: vi.fn(),
-    sanitize: true,
-    onSanitize: vi.fn(),
-    theme: "system" as const,
-    onTheme: vi.fn(),
-    collapsed: false,
-    onCollapsed: vi.fn(),
-  });
-
-  it("marks the current section and navigates", async () => {
-    const p = props();
-    render(<Sidebar {...p} />);
-    expect(screen.getByRole("button", { name: /Library & Recent/ })).toHaveAttribute("aria-current", "page");
-    await userEvent.click(screen.getByRole("button", { name: /Page Organizer/ }));
-    expect(p.onNavigate).toHaveBeenCalledWith("grid");
-  });
-
-  it("toggles sanitize and picks a theme", async () => {
-    const p = props();
-    render(<Sidebar {...p} />);
-    await userEvent.click(screen.getByRole("checkbox"));
-    expect(p.onSanitize).toHaveBeenCalledWith(false);
-    expect(screen.getByRole("radio", { name: "Match system" })).toHaveAttribute("aria-checked", "true");
-    await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
-    expect(p.onTheme).toHaveBeenCalledWith("dark");
-  });
-
-  it("collapses and expands", async () => {
-    const p = props();
-    const { rerender } = render(<Sidebar {...p} />);
-    expect(screen.getByRole("complementary")).not.toHaveClass("collapsed");
-    await userEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
-    expect(p.onCollapsed).toHaveBeenCalledWith(true);
-
-    rerender(<Sidebar {...p} collapsed />);
-    expect(screen.getByRole("complementary")).toHaveClass("collapsed");
-    // Labels are hidden by CSS when collapsed; the buttons keep their names.
-    expect(screen.getByRole("button", { name: "Page Organizer" })).not.toHaveAttribute("title");
-    await userEvent.click(screen.getByRole("button", { name: "Expand menu" }));
-    expect(p.onCollapsed).toHaveBeenCalledWith(false);
-  });
-
-  describe("tooltips", () => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
-    const tip = () => screen.queryByRole("tooltip");
-
-    it("show a label after hovering for a second when collapsed", () => {
-      render(<Sidebar {...props()} collapsed />);
-      const btn = screen.getByRole("button", { name: "Page Organizer" });
-      fireEvent.mouseOver(btn);
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS - 1));
-      expect(tip()).toBeNull();
-      act(() => vi.advanceTimersByTime(1));
-      expect(tip()).toHaveTextContent("Page Organizer");
-
-      // Moving within the same button keeps it; moving to another restarts the delay.
-      fireEvent.mouseOver(btn.querySelector("svg")!);
-      expect(tip()).toHaveTextContent("Page Organizer");
-      fireEvent.mouseOver(screen.getByRole("button", { name: "Sign & Protect" }));
-      expect(tip()).toBeNull();
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-      expect(tip()).toHaveTextContent("Sign & Protect · Coming soon");
-
-      fireEvent.mouseLeave(screen.getByRole("complementary"));
-      expect(tip()).toBeNull();
-    });
-
-    it("hide on click, and never show for things without a label", () => {
-      render(<Sidebar {...props()} collapsed />);
-      fireEvent.mouseOver(screen.getByRole("button", { name: "Expand menu" }));
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-      expect(tip()).toHaveTextContent("Expand menu (Ctrl+B)");
-      fireEvent.mouseDown(screen.getByRole("button", { name: "Expand menu" }));
-      expect(tip()).toBeNull();
-
-      fireEvent.mouseOver(screen.getByText("On this device"));
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-      expect(tip()).toBeNull();
-    });
-
-    it("do not show when the sidebar is expanded, except in a narrow window", () => {
-      const { unmount } = render(<Sidebar {...props()} />);
-      fireEvent.mouseOver(screen.getByRole("button", { name: "Page Organizer" }));
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-      expect(tip()).toBeNull();
-      unmount();
-
-      vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
-      render(<Sidebar {...props()} />);
-      fireEvent.mouseOver(screen.getByRole("button", { name: "Page Organizer" }));
-      act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-      expect(tip()).toHaveTextContent("Page Organizer");
-    });
+describe("ModeSwitch", () => {
+  it("marks the view in use and asks for another", async () => {
+    const onNavigate = vi.fn();
+    const { rerender } = render(<ModeSwitch section="read" onNavigate={onNavigate} />);
+    const view = screen.getByRole("radiogroup", { name: "View" });
+    expect(within(view).getByRole("radio", { name: "Read" })).toHaveAttribute("aria-checked", "true");
+    expect(within(view).getByRole("radio", { name: "Organize" })).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(within(view).getByRole("radio", { name: "Organize" }));
+    expect(onNavigate).toHaveBeenCalledWith("grid");
+    await userEvent.click(within(view).getByRole("radio", { name: "Edit" }));
+    expect(onNavigate).toHaveBeenCalledWith("edit");
+    // In the Library no view is checked.
+    rerender(<ModeSwitch section="library" onNavigate={onNavigate} />);
+    expect(within(view).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
   });
 });
 
-describe("ComingSoon / EmptyNote", () => {
-  it("shows the section label", () => {
-    render(<ComingSoon section="ocr" />);
-    expect(screen.getByRole("heading", { name: SECTION_INFO.ocr.label })).toBeInTheDocument();
-    expect(screen.getByText("Coming soon")).toBeInTheDocument();
+describe("SettingsMenu", () => {
+  const props = () => ({
+    sanitize: true,
+    onSanitize: vi.fn(),
+    recentEnabled: true,
+    onRecentEnabled: vi.fn(),
+    theme: "system" as const,
+    onTheme: vi.fn(),
+  });
+  const sanitize = () => screen.getByRole("checkbox", { name: "Sanitize on save" });
+  const button = () => screen.getByRole("button", { name: "Settings" });
+  const popover = () => screen.queryByRole("dialog", { name: "Settings" });
+
+  it("opens from the button: sanitize switch and theme", async () => {
+    const p = props();
+    render(<SettingsMenu {...p} />);
+    expect(popover()).not.toBeInTheDocument();
+    expect(button()).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button());
+    expect(button()).toHaveAttribute("aria-expanded", "true");
+    expect(sanitize()).toBeChecked();
+    await userEvent.click(sanitize());
+    expect(p.onSanitize).toHaveBeenCalledWith(false);
+    const remember = screen.getByRole("checkbox", { name: "Remember recent files" });
+    expect(remember).toBeChecked();
+    await userEvent.click(remember);
+    expect(p.onRecentEnabled).toHaveBeenCalledWith(false);
+    expect(screen.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
+    expect(p.onTheme).toHaveBeenCalledWith("dark");
+    // Using a control inside does not close it; the button does.
+    expect(popover()).toBeInTheDocument();
+    await userEvent.click(button());
+    expect(popover()).not.toBeInTheDocument();
   });
 
+  it("closes on Esc and on a click outside", async () => {
+    render(
+      <div>
+        <SettingsMenu {...props()} />
+        <p>elsewhere</p>
+      </div>,
+    );
+    await userEvent.click(button());
+    fireEvent.keyDown(document.body, { key: "a" });
+    expect(popover()).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(popover()).not.toBeInTheDocument();
+    await userEvent.click(button());
+    await userEvent.click(screen.getByText("elsewhere"));
+    expect(popover()).not.toBeInTheDocument();
+  });
+});
+
+describe("EmptyNote", () => {
   it("EmptyNote renders optional body", () => {
     const { rerender } = render(<EmptyNote icon="clock" title="Nothing" />);
     expect(screen.getByText("Nothing")).toBeInTheDocument();
@@ -144,15 +110,20 @@ describe("Library", () => {
     onShow: vi.fn(),
     onWatermark: vi.fn(),
     onClean: vi.fn(),
+    onOpenRecent: vi.fn(),
+    onRemoveRecent: vi.fn(),
+    onClearRecent: vi.fn(),
+    recent: null as RecentView | null,
   });
 
   it("with nothing open: offers to open, tools that need a document are disabled", async () => {
     const h = handlers();
     render(<Library docs={[]} pageCount={0} dirty={false} {...h} />);
     expect(screen.getByText(/Nothing open/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Watermark/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Add watermark/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Remove watermarks/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Compress/ })).toBeDisabled();
+    // Nothing unbuilt is offered.
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Open a PDF to start/ }));
     expect(h.onOpen).toHaveBeenCalledTimes(1);
     // Merging needs nothing open: the picked files become one new document.
@@ -174,7 +145,7 @@ describe("Library", () => {
     await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
     await userEvent.click(screen.getByRole("button", { name: /Append PDFs/ }));
     expect(h.onAdd).toHaveBeenCalledTimes(2);
-    await userEvent.click(screen.getByRole("button", { name: /^Watermark/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Add watermark/ }));
     expect(h.onWatermark).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: /Remove watermarks/ }));
     expect(h.onClean).toHaveBeenCalled();
@@ -182,6 +153,48 @@ describe("Library", () => {
     expect(h.onShow).toHaveBeenCalledWith("grid");
     await userEvent.click(screen.getAllByRole("button", { name: "Open" })[1]);
     expect(h.onShow).toHaveBeenCalledWith("read");
+  });
+
+  describe("recent files", () => {
+    const item = (id: number, fileName: string, openedAt = Date.now()) => ({
+      id,
+      fileName,
+      folder: "C:\\Users\\me\\Documents",
+      openedAt,
+    });
+    const list = () => screen.getByRole("list");
+
+    it("lists them newest first; a click opens one, the cross removes one", async () => {
+      const h = handlers();
+      const recent: RecentView = { enabled: true, items: [item(7, "report.pdf"), item(3, "contract.pdf", Date.now() - 86_400_000)] };
+      render(<Library docs={[]} pageCount={0} dirty={false} {...h} recent={recent} />);
+      expect(screen.getByRole("heading", { name: "Recent" })).toBeInTheDocument();
+      const rows = within(list()).getAllByRole("listitem");
+      expect(rows[0]).toHaveTextContent("report.pdf");
+      expect(rows[0]).toHaveTextContent("C:\\Users\\me\\Documents");
+      expect(rows[0]).toHaveTextContent("Today");
+      expect(rows[1]).toHaveTextContent("Yesterday");
+
+      await userEvent.click(within(rows[1]).getByRole("button", { name: /^contract\.pdf/ }));
+      expect(h.onOpenRecent).toHaveBeenCalledWith(3);
+      await userEvent.click(within(rows[0]).getByRole("button", { name: "Remove report.pdf from the list" }));
+      expect(h.onRemoveRecent).toHaveBeenCalledWith(7);
+      await userEvent.click(screen.getByRole("button", { name: "Clear list" }));
+      expect(h.onClearRecent).toHaveBeenCalledTimes(1);
+    });
+
+    it("an empty list says what will appear; no Clear button", () => {
+      render(<Library docs={[]} pageCount={0} dirty={false} {...handlers()} recent={{ enabled: true, items: [] }} />);
+      expect(screen.getByText("No recent files")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Clear list" })).not.toBeInTheDocument();
+    });
+
+    it("turned off, or not loaded yet, the section is not shown", () => {
+      const { rerender } = render(<Library docs={[]} pageCount={0} dirty={false} {...handlers()} recent={{ enabled: false, items: [] }} />);
+      expect(screen.queryByRole("heading", { name: "Recent" })).not.toBeInTheDocument();
+      rerender(<Library docs={[]} pageCount={0} dirty={false} {...handlers()} recent={null} />);
+      expect(screen.queryByRole("heading", { name: "Recent" })).not.toBeInTheDocument();
+    });
   });
 
   it("singular wording for one file and page", () => {
@@ -202,9 +215,13 @@ describe("Toasts", () => {
         onDismiss={onDismiss}
       />,
     );
-    expect(screen.getByText("Failed")).toHaveClass("toast", "error");
+    expect(screen.getByRole("alert")).toHaveClass("toast", "error");
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed");
     await userEvent.click(screen.getByText("Saved"));
     expect(onDismiss).toHaveBeenCalledWith(1);
+    // The close button is how the keyboard dismisses one.
+    await userEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Dismiss" }));
+    expect(onDismiss).toHaveBeenLastCalledWith(2);
   });
 });
 

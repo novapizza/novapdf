@@ -14,4 +14,5 @@ export const FIXTURES = {
   notPdf: join(FIXTURE_DIR, "not-a.pdf"),
   specWatermark: join(FIXTURE_DIR, "spec-watermark.pdf"),
   outlined: join(FIXTURE_DIR, "outlined.pdf"),
+  protected: join(FIXTURE_DIR, "protected.pdf"),
 };

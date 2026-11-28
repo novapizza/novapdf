@@ -5,7 +5,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { UPDATE_CHECK_INTERVAL_MS } from "./lib/autoUpdate";
-import type { WatermarkScan } from "./lib/types";
+import type { RecentView, WatermarkScan } from "./lib/types";
 import { tauriMock } from "./test/tauri";
 import { APP_NAME } from "./lib/brand";
 import { JPEG_BYTES, doc, opened, pageText } from "./test/fixtures";
@@ -22,14 +22,24 @@ function backend() {
     Array.from({ length: a.count as number }, (_, i) => ({ pageIndex: (a.first as number) + i, annots: [], more: 0 })),
   );
   tauriMock.handle("text_chars", () => ({ codes: [], boxes: [] }));
+  tauriMock.handle("list_recent", () => recentList);
 }
+/** What the fake backend reports as the recent files list. */
+let recentList: RecentView = { enabled: true, items: [] };
 const openReturns = (...docs: ReturnType<typeof doc>[]) =>
   tauriMock.handle("open_with_dialog", () => docs.map(opened));
 
 const status = () => document.querySelector("footer.status")!;
 /** A key press as the browser delivers it: on the focused element, bubbling to window. */
 const press = (init: KeyboardEventInit) => fireEvent.keyDown(document.activeElement ?? document.body, init);
-const nav = (name: RegExp) => userEvent.click(screen.getByRole("button", { name }));
+/** Switches the view with the Read | Organize | Edit control in the top bar. */
+const nav = (name: "Read" | "Organize" | "Edit") =>
+  userEvent.click(within(screen.getByRole("radiogroup", { name: "View" })).getByRole("radio", { name }));
+const goLibrary = () => userEvent.click(screen.getByRole("button", { name: "Library" }));
+/** Opens the settings popover (sanitize, theme) if it is closed. */
+const openSettings = async () => {
+  if (!screen.queryByRole("dialog", { name: "Settings" })) await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+};
 const tabList = () => screen.queryByRole("tablist", { name: "Open documents" });
 const docTab = (name: RegExp) => within(tabList()!).getByRole("tab", { name });
 const tabNames = () => (tabList() ? within(tabList()!).queryAllByRole("tab") : []).map((t) => t.querySelector(".name")!.textContent);
@@ -44,6 +54,7 @@ async function openDoc(pages = 3, name = "report.pdf") {
 }
 
 beforeEach(() => {
+  recentList = { enabled: true, items: [] };
   backend();
 });
 
@@ -63,7 +74,9 @@ describe("App: start and open", () => {
     expect(screen.getByRole("navigation", { name: "Reader tools" })).toBeInTheDocument();
     expect(status()).toHaveTextContent("Page 1 of 3");
     expect(status()).toHaveTextContent("Letter Portrait");
-    expect(status()).toHaveTextContent("Sanitize on");
+    // Sanitize is on by default; the switch is in the settings popover.
+    await openSettings();
+    expect(screen.getByRole("checkbox", { name: "Sanitize on save" })).toBeChecked();
     expect(document.querySelector(".doc-tab .name")).toHaveTextContent("report.pdf");
   });
 
@@ -75,7 +88,7 @@ describe("App: start and open", () => {
       opened(doc(51, 2, "also.pdf")),
     ]);
     await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
-    expect(await screen.findByText("bad.pdf: This file is not a PDF.")).toHaveClass("error");
+    expect((await screen.findByText("bad.pdf: This file is not a PDF.")).closest(".toast")).toHaveClass("error");
     expect(screen.getByText("Opened 2 files (3 pages)")).toBeInTheDocument();
     // Each file gets its own tab; the last one is in front.
     expect(tabNames()).toEqual(["good.pdf", "also.pdf"]);
@@ -217,7 +230,7 @@ describe("App: tabs", () => {
   it("each tab keeps its own pages and undo history", async () => {
     render(<App />);
     await openDoc(3, "a.pdf");
-    await nav(/Page Organizer/);
+    await nav("Organize");
     press({ key: "Delete" }); // the organizer selects the current page: page 1
     expect(status()).toHaveTextContent("2 pages");
     await openDoc(4, "b.pdf");
@@ -272,7 +285,7 @@ describe("App: tabs", () => {
   it("Merge PDFs from the library appends to the current tab and shows the merged pages", async () => {
     render(<App />);
     await openDoc(2, "a.pdf");
-    await nav(/Library/);
+    await goLibrary();
     openReturns(doc(704, 3, "extra.pdf"));
     await userEvent.click(screen.getByRole("button", { name: /Merge PDFs/ }));
     expect(await screen.findByText("Merged extra.pdf (3 pages)")).toBeInTheDocument();
@@ -285,14 +298,14 @@ describe("App: tabs", () => {
     render(<App />);
     await openDoc(1, "a.pdf");
     await openDoc(2, "b.pdf");
-    await nav(/Library/);
+    await goLibrary();
     expect(screen.queryByRole("navigation", { name: "Reader tools" })).not.toBeInTheDocument();
     await userEvent.click(docTab(/a\.pdf/));
     expect(activeTabName()).toBe("a.pdf");
     expect(screen.getByRole("navigation", { name: "Reader tools" })).toBeInTheDocument();
     expect(status()).toHaveTextContent("Page 1 of 1");
     // The Page Organizer stays where it is.
-    await nav(/Page Organizer/);
+    await nav("Organize");
     await userEvent.click(docTab(/b\.pdf/));
     expect(activeTabName()).toBe("b.pdf");
     expect(screen.getByRole("navigation", { name: "Selection tools" })).toBeInTheDocument();
@@ -316,7 +329,7 @@ describe("App: tabs", () => {
       expect.arrayContaining([{ docId: a.docId }, { docId: b.docId }]),
     );
     expect(screen.getByText("No document open")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Document Library/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
   });
 
   it("middle-click closes a tab; other buttons do not", async () => {
@@ -335,10 +348,10 @@ describe("App: tabs", () => {
     await openDoc(1, "b.pdf");
     fireEvent.keyDown(docTab(/a\.pdf/), { key: "Enter" });
     expect(activeTabName()).toBe("a.pdf");
-    await userEvent.click(screen.getByRole("button", { name: /Search tools/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Commands/ }));
     await userEvent.click(screen.getByText("Next tab"));
     expect(activeTabName()).toBe("b.pdf");
-    await userEvent.click(screen.getByRole("button", { name: /Search tools/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Commands/ }));
     await userEvent.click(screen.getByText("Close tab"));
     await waitFor(() => expect(tabNames()).toEqual(["a.pdf"]));
   });
@@ -348,14 +361,13 @@ describe("App: organize pages", () => {
   it("select, rotate, delete, undo and redo", async () => {
     render(<App />);
     await openDoc(4);
-    await nav(/Page Organizer/);
+    await nav("Organize");
     expect(screen.getByRole("navigation", { name: "Selection tools" })).toBeInTheDocument();
     // The page shown in the reader (page 1) comes in selected.
     expect(status()).toHaveTextContent("Selection: 1 page");
 
     fireEvent.click(screen.getByLabelText("Page 3"), { shiftKey: true });
     expect(status()).toHaveTextContent("Selection: 3 pages");
-    expect(screen.getByRole("region", { name: "Selection" })).toHaveTextContent("Pages: 1, 2, 3");
 
     await userEvent.click(screen.getByRole("button", { name: /Rotate \+90°/ }));
     expect(screen.getAllByText("90° CW")).toHaveLength(3);
@@ -377,7 +389,7 @@ describe("App: organize pages", () => {
   it("keyboard shortcuts in the organizer", async () => {
     render(<App />);
     await openDoc(3);
-    await nav(/Page Organizer/);
+    await nav("Organize");
     press({ key: "a", ctrlKey: true });
     expect(status()).toHaveTextContent("Selection: 3 pages");
     press({ key: "r" });
@@ -401,7 +413,7 @@ describe("App: organize pages", () => {
   it("ctrl-click toggles, Enter and Edit page open the editor on that page", async () => {
     render(<App />);
     await openDoc(3);
-    await nav(/Page Organizer/);
+    await nav("Organize");
     fireEvent.click(screen.getByLabelText("Page 3"), { ctrlKey: true });
     fireEvent.click(screen.getByLabelText("Page 1"), { ctrlKey: true });
     expect(status()).toHaveTextContent("Selection: 1 page");
@@ -409,26 +421,27 @@ describe("App: organize pages", () => {
     expect(await screen.findByRole("radiogroup", { name: "Edit tool" })).toBeInTheDocument();
     expect(status()).toHaveTextContent("Page 3 of 3");
 
-    await nav(/Page Organizer/);
-    await userEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: /Edit page/ }));
+    await nav("Organize");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Selection tools" })).getByRole("button", { name: /Edit page/ }));
     expect(await screen.findByRole("radiogroup", { name: "Edit tool" })).toBeInTheDocument();
   });
 
-  it("selection bar: rotate and deselect", async () => {
+  it("toolbar: deselect all clears the selection and turns the tools off", async () => {
     render(<App />);
     await openDoc(2);
-    await nav(/Page Organizer/);
-    const bar = screen.getByRole("region", { name: "Selection" });
-    await userEvent.click(within(bar).getByRole("button", { name: /Rotate/ }));
-    expect(screen.getByText("90° CW")).toBeInTheDocument();
-    await userEvent.click(within(bar).getByRole("button", { name: "Deselect all" }));
-    expect(screen.queryByRole("region", { name: "Selection" })).not.toBeInTheDocument();
+    await nav("Organize");
+    const bar = screen.getByRole("navigation", { name: "Selection tools" });
+    const deselect = within(bar).getByRole("button", { name: "Deselect all" });
+    await userEvent.click(deselect);
+    expect(status()).toHaveTextContent("Selection: none");
+    expect(deselect).toBeDisabled();
+    expect(within(bar).getByRole("button", { name: /Rotate \+90°/ })).toBeDisabled();
   });
 
   it("thumbnail size slider", async () => {
     render(<App />);
     await openDoc(1);
-    await nav(/Page Organizer/);
+    await nav("Organize");
     fireEvent.change(screen.getByRole("slider"), { target: { value: "300" } });
     expect(screen.getByLabelText("Page 1")).toHaveStyle({ width: "300px" });
   });
@@ -438,13 +451,13 @@ describe("App: save", () => {
   it("sends the workspace to the backend and marks it saved", async () => {
     render(<App />);
     const d = await openDoc(2, "Report.PDF");
-    await nav(/Page Organizer/);
+    await nav("Organize");
     await userEvent.click(screen.getByRole("button", { name: /Rotate \+90°/ }));
     tauriMock.handle("save_with_dialog", () => ({ path: "C:\\out\\Report-edited.pdf", warnings: ["Page 2 was copied without edits"] }));
 
     press({ key: "s", ctrlKey: true });
     expect(await screen.findByText("Saved C:\\out\\Report-edited.pdf")).toBeInTheDocument();
-    expect(screen.getByText("Page 2 was copied without edits")).toHaveClass("error");
+    expect(screen.getByText("Page 2 was copied without edits").closest(".toast")).toHaveClass("error");
     expect(tauriMock.calls("save_with_dialog")).toEqual([
       {
         args: {
@@ -464,7 +477,7 @@ describe("App: save", () => {
   it("a cancelled save keeps the changes unsaved; an error is shown", async () => {
     render(<App />);
     await openDoc(1);
-    await nav(/Page Organizer/);
+    await nav("Organize");
     press({ key: "r" });
     tauriMock.handle("save_with_dialog", () => null);
     await userEvent.click(screen.getByRole("button", { name: /Save as/ }));
@@ -477,49 +490,255 @@ describe("App: save", () => {
     expect(await screen.findByText("Disk full")).toBeInTheDocument();
   });
 
-  it("sanitize can be turned off from the sidebar", async () => {
+  it("sanitize can be turned off in settings", async () => {
     render(<App />);
     await openDoc(1);
-    await userEvent.click(screen.getByRole("checkbox"));
-    expect(status()).not.toHaveTextContent("Sanitize on");
+    await openSettings();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Sanitize on save" }));
+    expect(screen.getByRole("checkbox", { name: "Sanitize on save" })).not.toBeChecked();
     tauriMock.handle("save_with_dialog", () => null);
     await userEvent.click(screen.getByRole("button", { name: /Save as/ }));
     await waitFor(() => expect(tauriMock.calls("save_with_dialog")[0].args).toMatchObject({ sanitize: false }));
   });
 });
 
-describe("App: sidebar", () => {
-  const app = () => document.querySelector(".app")!;
+describe("App: views and find", () => {
+  const view = () => screen.queryByRole("radiogroup", { name: "View" });
+  const checked = () => within(view()!).getByRole("radio", { checked: true });
+  const findBox = () => screen.queryByRole("textbox", { name: "Find in document" });
 
-  it("collapses and expands from the button, Ctrl+B and the palette, and remembers it", async () => {
-    const { unmount } = render(<App />);
-    expect(app()).not.toHaveClass("sidebar-collapsed");
-    await userEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
-    expect(app()).toHaveClass("sidebar-collapsed");
-    expect(screen.getByRole("button", { name: "Expand menu" })).toHaveAttribute("aria-expanded", "false");
-
-    press({ key: "b", ctrlKey: true });
-    expect(app()).not.toHaveClass("sidebar-collapsed");
-
-    press({ key: "k", ctrlKey: true });
-    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "collapse menu");
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Search commands" }), { key: "Enter" });
-    expect(app()).toHaveClass("sidebar-collapsed");
-
-    // Persisted across launches.
-    unmount();
+  it("the view switch appears with a document and follows the view", async () => {
     render(<App />);
-    expect(app()).toHaveClass("sidebar-collapsed");
-    await userEvent.click(screen.getByRole("button", { name: "Expand menu" }));
-    expect(app()).not.toHaveClass("sidebar-collapsed");
+    expect(view()).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Library" })).toHaveAttribute("aria-current", "page");
+    await openDoc(2);
+    expect(checked()).toHaveAccessibleName("Read");
+    await nav("Organize");
+    expect(checked()).toHaveAccessibleName("Organize");
+    await nav("Edit");
+    expect(await screen.findByRole("radiogroup", { name: "Edit tool" })).toBeInTheDocument();
+    expect(checked()).toHaveAccessibleName("Edit");
+    // The Library is home: no view is checked there, and the document stays open.
+    await goLibrary();
+    expect(within(view()!).queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+    expect(tabNames()).toEqual(["report.pdf"]);
   });
 
-  it("Ctrl+B while typing in a field does not toggle the menu", async () => {
+  it("Ctrl+F opens find in the read view, from any view, and Esc closes it", async () => {
     render(<App />);
+    // Nothing to search with no document.
+    press({ key: "f", ctrlKey: true });
+    expect(findBox()).not.toBeInTheDocument();
+
+    await openDoc(2);
+    await nav("Organize");
+    press({ key: "f", ctrlKey: true });
+    expect(checked()).toHaveAccessibleName("Read");
+    expect(findBox()).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.keyDown(findBox()!, { key: "Escape" });
+    expect(findBox()).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "false");
+
+    // The toolbar button and the palette open it too.
+    await userEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(findBox()).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Close find" }));
     press({ key: "k", ctrlKey: true });
-    const box = await screen.findByRole("textbox", { name: "Search commands" });
-    fireEvent.keyDown(box, { key: "b", ctrlKey: true });
-    expect(app()).not.toHaveClass("sidebar-collapsed");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Search commands" }), "find in document");
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Search commands" }), { key: "Enter" });
+    expect(findBox()).toBeInTheDocument();
+  });
+});
+
+describe("App: recent files", () => {
+  const item = (id: number, fileName: string) => ({ id, fileName, folder: "C:\\docs", openedAt: Date.now() });
+  const recentRows = () => within(screen.getByRole("list")).queryAllByRole("listitem");
+
+  it("the Library shows the list from Rust and opens an entry by id in a new tab", async () => {
+    recentList = { enabled: true, items: [item(4, "report.pdf"), item(2, "old.pdf")] };
+    render(<App />);
+    await waitFor(() => expect(recentRows()).toHaveLength(2));
+    tauriMock.handle("open_recent", (a) => opened(doc(nextDoc++, 3, a.id === 4 ? "report.pdf" : "old.pdf")));
+    await userEvent.click(screen.getByRole("button", { name: /^report\.pdf/ }));
+    expect(await screen.findByText("Opened report.pdf (3 pages)")).toBeInTheDocument();
+    expect(tauriMock.calls("open_recent")).toEqual([{ id: 4 }]);
+    expect(tabNames()).toEqual(["report.pdf"]);
+    // The list is asked for again after an open: Rust moved the file to the top.
+    expect(tauriMock.calls("list_recent").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("a file that was moved or deleted is reported, and the list is refreshed", async () => {
+    recentList = { enabled: true, items: [item(5, "gone.pdf")] };
+    render(<App />);
+    await waitFor(() => expect(recentRows()).toHaveLength(1));
+    tauriMock.handle("open_recent", () => {
+      recentList = { enabled: true, items: [] };
+      return { fileName: "gone.pdf", document: null, error: "This file was moved or deleted, so it was taken off the recent list." };
+    });
+    await userEvent.click(screen.getByRole("button", { name: /^gone\.pdf/ }));
+    expect(await screen.findByText(/gone\.pdf: This file was moved or deleted/)).toBeInTheDocument();
+    expect(await screen.findByText("No recent files")).toBeInTheDocument();
+    expect(tabList()).not.toBeInTheDocument();
+  });
+
+  it("remove, clear and the settings switch use the list Rust hands back", async () => {
+    recentList = { enabled: true, items: [item(1, "a.pdf"), item(2, "b.pdf")] };
+    render(<App />);
+    await waitFor(() => expect(recentRows()).toHaveLength(2));
+    tauriMock.handle("remove_recent", () => ({ enabled: true, items: [item(2, "b.pdf")] }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove a.pdf from the list" }));
+    expect(tauriMock.calls("remove_recent")).toEqual([{ id: 1 }]);
+    await waitFor(() => expect(recentRows()).toHaveLength(1));
+
+    tauriMock.handle("clear_recent", () => ({ enabled: true, items: [] }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear list" }));
+    expect(await screen.findByText("No recent files")).toBeInTheDocument();
+
+    tauriMock.handle("set_recent_enabled", (a) => ({ enabled: a.enabled as boolean, items: [] }));
+    await openSettings();
+    const remember = screen.getByRole("checkbox", { name: "Remember recent files" });
+    expect(remember).toBeChecked();
+    await userEvent.click(remember);
+    expect(tauriMock.calls("set_recent_enabled")).toEqual([{ enabled: false }]);
+    await waitFor(() => expect(remember).not.toBeChecked());
+    expect(screen.queryByRole("heading", { name: "Recent" })).not.toBeInTheDocument();
+  });
+
+  it("a change Rust refuses is reported; a list that cannot be read is simply not shown", async () => {
+    tauriMock.handle("list_recent", () => {
+      throw "unreadable";
+    });
+    render(<App />);
+    await waitFor(() => expect(tauriMock.calls("list_recent")).toHaveLength(1));
+    expect(screen.queryByRole("heading", { name: "Recent" })).not.toBeInTheDocument();
+    tauriMock.handle("set_recent_enabled", () => {
+      throw "Could not change the setting.";
+    });
+    await openSettings();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Remember recent files" }));
+    expect(await screen.findByText("Could not change the setting.")).toBeInTheDocument();
+  });
+
+  it("an open that fails outright is reported", async () => {
+    recentList = { enabled: true, items: [item(9, "x.pdf")] };
+    render(<App />);
+    await waitFor(() => expect(recentRows()).toHaveLength(1));
+    tauriMock.handle("open_recent", () => {
+      throw "Worker crashed.";
+    });
+    await userEvent.click(screen.getByRole("button", { name: /^x\.pdf/ }));
+    expect(await screen.findByText("Worker crashed.")).toBeInTheDocument();
+  });
+});
+
+describe("App: password-protected files", () => {
+  const lockedOutcome = (fileName: string, locked: number, error: string | null = null) => ({
+    fileName,
+    document: null,
+    error,
+    locked,
+  });
+  const dialog = () => screen.queryByRole("dialog", { name: "Enter password" });
+  const passwordBox = () => screen.getByLabelText("Password");
+
+  it("asks for the password, retries a wrong one, then opens the file with a lock on its tab", async () => {
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("secret.pdf", 7)]);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    expect(await screen.findByRole("dialog", { name: "Enter password" })).toHaveTextContent("secret.pdf");
+    // A locked file is not an error.
+    expect(document.querySelector(".toast.error")).toBeNull();
+
+    tauriMock.handle("unlock_file", (a) =>
+      a.password === "right"
+        ? { ...opened({ ...doc(901, 2, "secret.pdf"), protected: true }) }
+        : lockedOutcome("secret.pdf", 7, "Wrong password. Try again."),
+    );
+    await userEvent.type(passwordBox(), "wrong{Enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong password. Try again.");
+    expect(tabList()).not.toBeInTheDocument();
+
+    await userEvent.type(passwordBox(), "right{Enter}");
+    expect(await screen.findByText("Opened secret.pdf (2 pages)")).toBeInTheDocument();
+    expect(dialog()).not.toBeInTheDocument();
+    expect(tauriMock.calls("unlock_file")).toEqual([
+      { lockedId: 7, password: "wrong" },
+      { lockedId: 7, password: "right" },
+    ]);
+    expect(within(docTab(/secret\.pdf/)).getByLabelText("Password-protected")).toBeInTheDocument();
+  });
+
+  it("several protected files are asked for one after another; Cancel skips one", async () => {
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("a.pdf", 1), opened(doc(902, 1, "plain.pdf")), lockedOutcome("b.pdf", 2)]);
+    tauriMock.handle("discard_locked", () => null);
+    tauriMock.handle("unlock_file", () => opened({ ...doc(903, 3, "b.pdf"), protected: true }));
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    // The plain file opens at once.
+    expect(await screen.findByText("Opened plain.pdf (1 page)")).toBeInTheDocument();
+    expect(dialog()).toHaveTextContent("a.pdf");
+    expect(dialog()).toHaveTextContent("1 more file waiting");
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(tauriMock.calls("discard_locked")).toEqual([{ lockedId: 1 }]);
+    expect(dialog()).toHaveTextContent("b.pdf");
+    await userEvent.type(passwordBox(), "pw{Enter}");
+    expect(await screen.findByText("Opened b.pdf (3 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["plain.pdf", "b.pdf"]);
+  });
+
+  it("app shortcuts are off while the prompt is open", async () => {
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("a.pdf", 1)]);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    await screen.findByRole("dialog", { name: "Enter password" });
+    press({ key: "k", ctrlKey: true });
+    press({ key: "o", ctrlKey: true });
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(tauriMock.calls("open_with_dialog")).toHaveLength(1);
+  });
+
+  it("a file that fails for another reason, or an unlock that throws, is reported and the prompt moves on", async () => {
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("a.pdf", 1), lockedOutcome("b.pdf", 2)]);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    tauriMock.handle("unlock_file", () => ({ fileName: "a.pdf", document: null, error: "This file is damaged." }));
+    await userEvent.type(await screen.findByLabelText("Password"), "pw{Enter}");
+    expect(await screen.findByText("a.pdf: This file is damaged.")).toBeInTheDocument();
+    expect(dialog()).toHaveTextContent("b.pdf");
+
+    tauriMock.handle("unlock_file", () => {
+      throw "Worker crashed.";
+    });
+    await userEvent.type(passwordBox(), "pw{Enter}");
+    expect(await screen.findByText("b.pdf: Worker crashed.")).toBeInTheDocument();
+    expect(dialog()).not.toBeInTheDocument();
+  });
+
+  it("merging a protected file appends it once unlocked", async () => {
+    render(<App />);
+    await openDoc(2, "main.pdf");
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("extra.pdf", 4)]);
+    press({ key: "o", ctrlKey: true, shiftKey: true });
+    await screen.findByRole("dialog", { name: "Enter password" });
+    tauriMock.handle("unlock_file", () => opened({ ...doc(904, 3, "extra.pdf"), protected: true }));
+    await userEvent.type(passwordBox(), "pw{Enter}");
+    expect(await screen.findByText("Merged extra.pdf (3 pages)")).toBeInTheDocument();
+    expect(tabNames()).toEqual(["main.pdf"]);
+  });
+
+  it("a save of a protected document says it keeps the password", async () => {
+    tauriMock.handle("open_with_dialog", () => [lockedOutcome("secret.pdf", 7)]);
+    tauriMock.handle("unlock_file", () => opened({ ...doc(905, 1, "secret.pdf"), protected: true }));
+    tauriMock.handle("save_with_dialog", () => ({ path: "C:\\out\\secret-edited.pdf", warnings: [], protected: true }));
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /^Open$/ }));
+    await userEvent.type(await screen.findByLabelText("Password"), "pw{Enter}");
+    await screen.findByText("Opened secret.pdf (1 page)");
+    await userEvent.click(screen.getByRole("button", { name: /Save as/ }));
+    expect(await screen.findByText("Saved C:\\out\\secret-edited.pdf. It opens with the same password.")).toBeInTheDocument();
   });
 });
 
@@ -527,7 +746,7 @@ describe("App: unsaved-changes guards", () => {
   async function dirtyApp() {
     render(<App />);
     await openDoc(2, "a.pdf");
-    await nav(/Page Organizer/);
+    await nav("Organize");
     press({ key: "Delete" });
   }
 
@@ -735,7 +954,7 @@ describe("App: updates", () => {
       });
       render(<App />);
       await openDoc(2, "a.pdf");
-      await nav(/Page Organizer/);
+      await nav("Organize");
       press({ key: "Delete" });
 
       tauriMock.ask.mockResolvedValue(false);
@@ -757,14 +976,16 @@ describe("App: updates", () => {
 });
 
 describe("App: navigation and command palette", () => {
-  it("coming-soon sections and placeholders", async () => {
+  it("a document with every page deleted says so, and the Library is one click away", async () => {
     render(<App />);
-    await nav(/OCR & Export/);
-    expect(screen.getByText("Coming soon")).toBeInTheDocument();
-    await nav(/Document Workspace/);
-    expect(screen.getByText(/Open a PDF to start/)).toBeInTheDocument();
-    await nav(/Library & Recent/);
-    expect(screen.getByRole("heading", { name: /Document Library/ })).toBeInTheDocument();
+    await openDoc(1);
+    await nav("Organize");
+    press({ key: "Delete" });
+    expect(screen.getByRole("heading", { name: "No pages to show" })).toBeInTheDocument();
+    await goLibrary();
+    expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
+    // Nothing unbuilt is offered anywhere in the shell.
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
   });
 
   it("Ctrl+K opens the palette; running a command closes it", async () => {
@@ -772,13 +993,13 @@ describe("App: navigation and command palette", () => {
     await openDoc(2);
     press({ key: "k", ctrlKey: true });
     const box = await screen.findByRole("textbox", { name: "Search commands" });
-    await userEvent.type(box, "page organizer");
+    await userEvent.type(box, "organize pages");
     fireEvent.keyDown(box, { key: "Enter" });
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Selection tools" })).toBeInTheDocument();
 
     // Palette commands that act on the selection.
-    await userEvent.click(screen.getByRole("button", { name: /Search tools and actions/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Commands/ }));
     await userEvent.type(screen.getByRole("textbox", { name: "Search commands" }), "rotate selected pages right");
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Search commands" }), { key: "Enter" });
     expect(screen.getByText("90° CW")).toBeInTheDocument();
@@ -823,7 +1044,7 @@ describe("App: navigation and command palette", () => {
     expect(within(colours).getByRole("radio", { name: "Green" })).toHaveAttribute("aria-checked", "true");
 
     // Ink has its own colour, and the marker uses the highlight colour.
-    await userEvent.click(tool("Ink"));
+    await userEvent.click(tool("Draw"));
     expect(within(screen.getByRole("radiogroup", { name: "Colour" })).getByRole("radio", { name: "Red" })).toHaveAttribute(
       "aria-checked",
       "true",
@@ -844,13 +1065,13 @@ describe("App: navigation and command palette", () => {
 });
 
 describe("App: watermarks", () => {
-  it("applies a watermark from the Stamp tool and sends it on save", async () => {
+  it("applies a watermark from the Watermark tool and sends it on save", async () => {
     render(<App />);
     await openDoc(1);
-    await userEvent.click(screen.getByRole("button", { name: /Stamp/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Watermark$/ }));
     await userEvent.click(await screen.findByRole("button", { name: /Apply to all pages/ }));
-    expect(screen.queryByRole("dialog", { name: "Watermark Studio" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Stamp/ })).toHaveClass("active");
+    expect(screen.queryByRole("dialog", { name: "Watermark" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Watermark$/ })).toHaveClass("active");
     tauriMock.handle("save_with_dialog", () => null);
     press({ key: "s", ctrlKey: true });
     await waitFor(() =>
@@ -871,7 +1092,7 @@ describe("App: watermarks", () => {
       matchingText: 0,
     };
     tauriMock.handle("find_watermarks", () => scan);
-    await userEvent.click(screen.getByRole("button", { name: /Remove stamps/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Remove watermarks/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Scan" }));
     await userEvent.click(await screen.findByRole("button", { name: "Remove 3" }));
     expect(await screen.findByText("Removed 3 watermark items from 2 pages")).toBeInTheDocument();

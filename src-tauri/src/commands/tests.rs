@@ -196,7 +196,7 @@ fn write_atomically_rejects_a_path_without_parent() {
 
 #[test]
 fn grants_are_one_time() {
-    let state = AppState::new(Pool::new(None).unwrap());
+    let state = AppState::new(Pool::new(None).unwrap(), None);
     let a = PathBuf::from("C:\\drop\\a.pdf");
     let b = PathBuf::from("C:\\drop\\b.pdf");
     assert!(!state.take_grant(&a), "nothing granted yet");
@@ -208,6 +208,152 @@ fn grants_are_one_time() {
     // Granting again (a second drop) re-enables it.
     state.grant(std::slice::from_ref(&a));
     assert!(state.take_grant(&a));
+}
+
+// ---------- recent files ----------
+
+#[test]
+fn opened_files_go_on_the_recent_list_and_are_stored() {
+    let dir = TempDir::new();
+    let store = dir.path("recent.json");
+    let state = AppState::new(Pool::new(None).unwrap(), Some(store.clone()));
+    assert!(state.recent_view().enabled);
+    state.record_open(dir.path("a.pdf"));
+    state.record_open(dir.path("b.pdf"));
+    let names: Vec<_> = state.recent_view().items.into_iter().map(|i| i.file_name).collect();
+    assert_eq!(names, ["b.pdf", "a.pdf"]);
+    // Stored at once, so the next launch has it.
+    let again = AppState::new(Pool::new(None).unwrap(), Some(store));
+    assert_eq!(again.recent_view().items.len(), 2);
+}
+
+#[test]
+fn a_recent_entry_opens_by_id_only_while_the_file_is_there() {
+    let dir = TempDir::new();
+    let state = AppState::new(Pool::new(None).unwrap(), None);
+    let file = dir.path("here.pdf");
+    std::fs::write(&file, b"%PDF-1.7").unwrap();
+    state.record_open(file.clone());
+    state.record_open(dir.path("gone.pdf"));
+    let view = state.recent_view();
+    let (gone, here) = (view.items[0].id, view.items[1].id);
+
+    assert_eq!(state.recent_target(here).ok(), Some(file));
+
+    // A file that was moved or deleted comes off the list, and the outcome says why.
+    let out = state.recent_target(gone).unwrap_err();
+    assert_eq!(out.file_name, "gone.pdf");
+    assert!(out.error.unwrap().contains("moved or deleted"));
+    assert_eq!(state.recent_view().items.len(), 1);
+
+    // An id the list does not have opens nothing.
+    let out = state.recent_target(9999).unwrap_err();
+    assert!(out.document.is_none());
+    assert!(out.error.unwrap().contains("no longer in the recent list"));
+}
+
+#[test]
+fn a_recent_list_that_cannot_be_stored_still_works_for_the_session() {
+    let dir = TempDir::new();
+    // A folder where the file should go: every save fails.
+    let store = dir.path("recent.json");
+    std::fs::create_dir_all(store.join("blocker")).unwrap();
+    let state = AppState::new(Pool::new(None).unwrap(), Some(store));
+    state.record_open(dir.path("a.pdf"));
+    assert_eq!(state.recent_view().items.len(), 1);
+}
+
+#[test]
+fn recent_view_serializes_as_the_ui_reads_it() {
+    let state = AppState::new(Pool::new(None).unwrap(), None);
+    state.record_open(std::env::temp_dir().join("a.pdf"));
+    let v = serde_json::to_value(state.recent_view()).unwrap();
+    assert_eq!(v["enabled"], json!(true));
+    let item = &v["items"][0];
+    assert_eq!(item["fileName"], json!("a.pdf"));
+    assert!(item["id"].is_u64() && item["openedAt"].is_u64() && item["folder"].is_string());
+    // No path the UI could send back.
+    assert!(item.get("path").is_none());
+}
+
+// ---------- password-protected files ----------
+
+#[test]
+fn locked_files_are_held_by_id_and_capped() {
+    let mut l = Locked::default();
+    let a = l.add(PathBuf::from(r"C:\docs\a.pdf"));
+    let b = l.add(PathBuf::from(r"C:\docs\b.pdf"));
+    assert_ne!(a, b);
+    assert_eq!(l.get(a), Some(PathBuf::from(r"C:\docs\a.pdf")));
+    l.remove(a);
+    assert_eq!(l.get(a), None);
+    assert!(l.get(b).is_some());
+    // The oldest is dropped once the cap is reached.
+    for i in 0..MAX_LOCKED {
+        l.add(PathBuf::from(format!(r"C:\docs\{i}.pdf")));
+    }
+    assert_eq!(l.get(b), None);
+    assert_eq!(l.files.len(), MAX_LOCKED);
+}
+
+fn out_page(doc_id: DocId) -> OutputPage {
+    serde_json::from_value(json!({ "docId": doc_id, "pageIndex": 0 })).unwrap()
+}
+
+#[test]
+fn a_save_is_encrypted_with_the_first_protected_files_password() {
+    let pw = |id: DocId| match id {
+        2 => Some("two".to_string()),
+        3 => Some("three".to_string()),
+        4 => Some("two".to_string()),
+        _ => None,
+    };
+    let key = || Ok(vec![5u8; 32]);
+
+    // Nothing protected: a plain save, and no key is made.
+    let (enc, warn) = save_encryption(&[out_page(1)], pw, || panic!("no key needed")).unwrap();
+    assert!(enc.is_none() && warn.is_none());
+
+    // The first protected file in page order decides.
+    let (enc, warn) = save_encryption(&[out_page(1), out_page(2), out_page(1)], pw, key).unwrap();
+    let enc = enc.unwrap();
+    assert_eq!((enc.password.as_str(), enc.key.len()), ("two", 32));
+    assert!(warn.is_none());
+
+    // Two files with the same password: no warning.
+    let (_, warn) = save_encryption(&[out_page(2), out_page(4)], pw, key).unwrap();
+    assert!(warn.is_none());
+
+    // Different passwords: the first wins, and the user is told.
+    let (enc, warn) = save_encryption(&[out_page(3), out_page(2)], pw, key).unwrap();
+    assert_eq!(enc.unwrap().password, "three");
+    assert!(warn.unwrap().contains("different passwords"));
+
+    // No random key, no save.
+    let err = save_encryption(&[out_page(2)], pw, || Err("no randomness".into())).unwrap_err();
+    assert_eq!(err, "no randomness");
+}
+
+#[test]
+fn random_keys_are_32_bytes_and_differ() {
+    let (a, b) = (random_key().unwrap(), random_key().unwrap());
+    assert_eq!((a.len(), b.len()), (32, 32));
+    assert_ne!(a, b);
+}
+
+#[test]
+fn open_outcomes_serialize_as_the_ui_reads_them() {
+    let failed = serde_json::to_value(OpenOutcome::failed("a.pdf".into(), "Nope")).unwrap();
+    assert_eq!(failed, json!({ "fileName": "a.pdf", "document": null, "error": "Nope" }));
+    let locked = OpenOutcome { file_name: "b.pdf".into(), document: None, error: None, locked: Some(3) };
+    assert_eq!(serde_json::to_value(locked).unwrap()["locked"], json!(3));
+    let opened = OpenOutcome {
+        file_name: "c.pdf".into(),
+        document: Some(OpenedDocument { doc_id: 1, file_name: "c.pdf".into(), pages: vec![], protected: true }),
+        error: None,
+        locked: None,
+    };
+    assert_eq!(serde_json::to_value(opened).unwrap()["document"]["protected"], json!(true));
 }
 
 // ---------- launch command line ----------
@@ -239,7 +385,7 @@ fn launch_paths_are_capped() {
 
 #[test]
 fn launch_files_are_granted_and_taken_once() {
-    let state = AppState::new(Pool::new(None).unwrap());
+    let state = AppState::new(Pool::new(None).unwrap(), None);
     assert!(!state.queue_launch(Vec::new()), "nothing to queue");
     assert!(state.take_launch().is_empty());
 
@@ -306,21 +452,23 @@ fn outcomes_serialize_as_the_ui_expects() {
             doc_id: 4,
             file_name: "a.pdf".into(),
             pages: vec![PageInfo { width: 612.0, height: 792.0 }],
+            protected: false,
         }),
         error: None,
+        locked: None,
     };
     assert_eq!(
         serde_json::to_value(&ok).unwrap(),
         json!({"fileName": "a.pdf", "error": null,
-               "document": {"docId": 4, "fileName": "a.pdf", "pages": [{"width": 612.0, "height": 792.0}]}})
+               "document": {"docId": 4, "fileName": "a.pdf", "pages": [{"width": 612.0, "height": 792.0}], "protected": false}})
     );
-    let err = OpenOutcome { file_name: "b.pdf".into(), document: None, error: Some("nope".into()) };
+    let err = OpenOutcome::failed("b.pdf".into(), "nope");
     assert_eq!(
         serde_json::to_value(&err).unwrap(),
         json!({"fileName": "b.pdf", "document": null, "error": "nope"})
     );
-    let saved = SaveOutcome { path: "C:\\x.pdf".into(), warnings: vec!["w".into()] };
-    assert_eq!(serde_json::to_value(&saved).unwrap(), json!({"path": "C:\\x.pdf", "warnings": ["w"]}));
+    let saved = SaveOutcome { path: "C:\\x.pdf".into(), warnings: vec!["w".into()], protected: true };
+    assert_eq!(serde_json::to_value(&saved).unwrap(), json!({"path": "C:\\x.pdf", "warnings": ["w"], "protected": true}));
 }
 
 // ---------- open-file de-duplication ----------
