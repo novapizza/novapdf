@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "novapdf"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "fontdb",
  "getrandom 0.4.3",
