@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { FIXTURES, WORK_DIR } from "./paths";
-import { expect, launchApp, statusBar, test, toast } from "./app";
+import { expect, launchApp, statusBar, test, toast, showView } from "./app";
 
 const saved = (() => {
   mkdirSync(join(WORK_DIR, "saved"), { recursive: true });
@@ -12,7 +12,7 @@ const saved = (() => {
 test.use({ appOptions: { grants: [FIXTURES.sample, FIXTURES.specWatermark], saveTo: saved } });
 
 async function scan(page: Page, text = "") {
-  await page.getByRole("button", { name: /Remove stamps/ }).click();
+  await page.getByRole("button", { name: /Remove watermarks/ }).click();
   const dialog = page.getByRole("dialog", { name: "Remove watermarks" });
   if (text) await dialog.getByRole("textbox").fill(text);
   await dialog.getByRole("button", { name: "Scan" }).click();
@@ -30,15 +30,15 @@ test("finds tagged watermarks, removes them, stamps a new one, and the saved fil
   await dialog.getByRole("button", { name: "Remove 3" }).click();
   await expect(toast(page, "Removed 3 watermark items from 3 pages")).toBeVisible();
 
-  // Watermark Studio: live PDFium preview, then apply.
-  await page.getByRole("button", { name: /^Stamp$/ }).click();
-  const studio = page.getByRole("dialog", { name: "Watermark Studio" });
+  // Watermark dialog: live PDFium preview, then apply.
+  await page.getByRole("button", { name: /^Watermark$/ }).click();
+  const studio = page.getByRole("dialog", { name: "Watermark", exact: true });
   await studio.getByRole("button", { name: "DRAFT", exact: true }).click();
   const preview = studio.getByAltText("Watermark preview");
   await expect(preview).toBeVisible();
   await expect.poll(() => preview.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(420);
   await studio.getByRole("button", { name: /Apply to all pages/ }).click();
-  await expect(page.getByRole("button", { name: /^Stamp$/ })).toHaveClass(/active/);
+  await expect(page.getByRole("button", { name: /^Watermark$/ })).toHaveClass(/active/);
 
   await page.getByRole("button", { name: /Save as/ }).click();
   await expect(toast(page, `Saved ${saved}`)).toBeVisible();
@@ -52,7 +52,7 @@ test("finds tagged watermarks, removes them, stamps a new one, and the saved fil
     await expect(d).toContainText("Found 3 items on 3 pages: 3 tagged, 0 annotations, 0 matching text.");
     // And it is the DRAFT stamp: the editor shows it as tagged watermark text.
     await d.getByRole("button", { name: "Close" }).click();
-    await fresh.page.getByRole("button", { name: /Advanced Editor/ }).click();
+    await showView(fresh.page, "Edit");
     await fresh.page.locator('.page-surface[data-page="1"] .ov-loose').first().click();
     await expect(fresh.page.locator(".inspector .quote")).toHaveText("DRAFT");
     await expect(fresh.page.getByText("tagged as watermark")).toBeVisible();

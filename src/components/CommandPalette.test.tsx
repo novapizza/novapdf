@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { type Command, CommandPalette } from "./CommandPalette";
 
 const cmds = (): Command[] => [
-  { id: "soon", title: "Redact content", description: "Not available yet", icon: "redact", tag: "Soon" },
+  { id: "off", title: "Redact content", description: "Needs a document", icon: "redact", tag: "Tool" },
   { id: "open", title: "Open PDF", description: "Replace the workspace", icon: "folderOpen", tag: "Action", shortcut: "Ctrl O", run: vi.fn() },
   { id: "save", title: "Save as new PDF", description: "Write a new file", icon: "save", tag: "Action", shortcut: "Ctrl S", run: vi.fn() },
   { id: "wm", title: "Watermark Studio", description: "Text stamp", icon: "stamp", tag: "Tool", run: vi.fn() },

@@ -5,6 +5,8 @@ export interface DocInfo {
   docId: DocId;
   fileName: string;
   pages: PageInfo[];
+  /** Opened with a password. */
+  protected?: boolean;
 }
 
 export interface PageItem {

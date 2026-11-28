@@ -68,8 +68,7 @@ impl Lib {
         match unsafe { self.b.FPDF_GetLastError() } {
             2 => "The file could not be read.".into(),
             3 => "This file is not a valid PDF or is damaged.".into(),
-            4 => "This PDF is password-protected. Password-protected files are not supported yet."
-                .into(),
+            4 => crate::protocol::NEEDS_PASSWORD.into(),
             5 => "This PDF uses an unsupported security handler.".into(),
             6 => "A page could not be loaded.".into(),
             _ => "PDFium could not process this document.".into(),
@@ -93,13 +92,15 @@ pub struct Doc<'l> {
 
 impl<'l> Doc<'l> {
     pub fn load(lib: &'l Lib, bytes: Vec<u8>) -> Result<Self, String> {
-        Self::load_from(lib, Backing::Owned(bytes))
+        Self::load_from(lib, Backing::Owned(bytes), None)
     }
 
     /// Loads from owned bytes or a read-only shared-memory view. Moving the backing
     /// into `Self` does not move the bytes themselves, so PDFium's pointer stays valid.
-    pub fn load_from(lib: &'l Lib, bytes: Backing) -> Result<Self, String> {
-        let h = unsafe { lib.b().FPDF_LoadMemDocument64(bytes.bytes(), None) };
+    /// A protected file needs its `password`; without it, or with the wrong one, the
+    /// error is `protocol::NEEDS_PASSWORD`.
+    pub fn load_from(lib: &'l Lib, bytes: Backing, password: Option<&str>) -> Result<Self, String> {
+        let h = unsafe { lib.b().FPDF_LoadMemDocument64(bytes.bytes(), password) };
         if h.is_null() {
             return Err(lib.last_error());
         }

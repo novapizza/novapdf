@@ -1,183 +1,134 @@
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { DocInfo } from "../state/workspace";
+import type { RecentView } from "../lib/types";
+import { whenOpened } from "../lib/recent";
 import type { ThemePref } from "../lib/theme";
 import { Icon, type IconName } from "./Icon";
-import { APP_NAME } from "../lib/brand";
 
-/** Top-level areas of the app, shown in the sidebar. */
-export type Section = "library" | "read" | "grid" | "edit" | "sign" | "ocr" | "cloud" | "vault";
+/** What the window shows: the Library (home), or one of three views of the document in front. */
+export type Section = "library" | "read" | "grid" | "edit";
+export type DocMode = Exclude<Section, "library">;
 
-interface NavItem {
-  key: Section;
-  label: string;
-  icon: IconName;
-  /** Not built yet: shows an empty placeholder. */
-  soon?: boolean;
+const MODES: { key: DocMode; label: string; title: string }[] = [
+  { key: "read", label: "Read", title: "Read and comment" },
+  { key: "grid", label: "Organize", title: "Reorder, rotate and delete pages" },
+  { key: "edit", label: "Edit", title: "Change text and add text boxes" },
+];
+
+/** Read | Organize | Edit: the three views of the open document. None is checked in the Library. */
+export function ModeSwitch(props: { section: Section; onNavigate: (s: Section) => void }) {
+  return (
+    <div className="segmented mode-switch" role="radiogroup" aria-label="View">
+      {MODES.map((m) => (
+        <button
+          key={m.key}
+          role="radio"
+          aria-checked={props.section === m.key}
+          className={props.section === m.key ? "active" : undefined}
+          title={m.title}
+          onClick={() => props.onNavigate(m.key)}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-const WORKSPACES: NavItem[] = [
-  { key: "library", label: "Library & Recent", icon: "library" },
-  { key: "read", label: "Document Workspace", icon: "fileText" },
-  { key: "grid", label: "Page Organizer", icon: "grid" },
-  { key: "edit", label: "Advanced Editor", icon: "edit" },
-  { key: "sign", label: "Sign & Protect", icon: "shield", soon: true },
-  { key: "ocr", label: "OCR & Export", icon: "scan", soon: true },
-];
-const STORAGE: NavItem[] = [
-  { key: "cloud", label: "Cloud Drives", icon: "cloud", soon: true },
-  { key: "vault", label: "Local Vault", icon: "lock", soon: true },
+const THEMES: { key: ThemePref; label: string }[] = [
+  { key: "system", label: "System" },
+  { key: "light", label: "Light" },
+  { key: "dark", label: "Dark" },
 ];
 
-export const SECTION_INFO: Record<Section, { label: string; icon: IconName; soon?: boolean }> = Object.fromEntries(
-  [...WORKSPACES, ...STORAGE].map((n) => [n.key, n]),
-) as Record<Section, NavItem>;
-
-const THEMES: { key: ThemePref; label: string; icon: IconName }[] = [
-  { key: "system", label: "Match system", icon: "monitor" },
-  { key: "light", label: "Light", icon: "sun" },
-  { key: "dark", label: "Dark", icon: "moon" },
-];
-
-/** Hover time before a compact-sidebar tooltip appears. */
-export const TIP_DELAY_MS = 1000;
-/** Matches the narrow-window rule in App.css, where the sidebar is icons-only too. */
-const NARROW_WINDOW = "(max-width: 1100px)";
-
-export function Sidebar(props: {
-  section: Section;
-  onNavigate: (s: Section) => void;
+/** The settings button in the top bar and its popover: sanitize on save, and the theme. */
+export function SettingsMenu(props: {
   sanitize: boolean;
   onSanitize: (v: boolean) => void;
+  /** Whether opened files are remembered in the Library's recent list. */
+  recentEnabled: boolean;
+  onRecentEnabled: (v: boolean) => void;
   theme: ThemePref;
   onTheme: (t: ThemePref) => void;
-  collapsed: boolean;
-  onCollapsed: (v: boolean) => void;
 }) {
-  // Icons-only sidebar: labels show as a tooltip after hovering for TIP_DELAY_MS.
-  // Native `title` tooltips cannot be delayed, so this is drawn by hand, in a portal
-  // because the sidebar clips its contents.
-  const [tip, setTip] = useState<{ label: string; x: number; y: number } | null>(null);
-  const hovered = useRef<HTMLElement | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-  const hideTip = () => {
-    window.clearTimeout(timer.current);
-    hovered.current = null;
-    setTip(null);
-  };
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  const onOver = (e: MouseEvent) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-tip]");
-    if (el === hovered.current) return;
-    hideTip();
-    if (!el || !(props.collapsed || window.matchMedia(NARROW_WINDOW).matches)) return;
-    hovered.current = el;
-    timer.current = window.setTimeout(() => {
-      const r = el.getBoundingClientRect();
-      setTip({ label: el.dataset.tip!, x: r.right + 10, y: r.top + r.height / 2 });
-    }, TIP_DELAY_MS);
-  };
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  // Open: a click outside or Esc closes it.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
-  const item = (n: NavItem) => (
-    <button
-      key={n.key}
-      className={`nav-item${props.section === n.key ? " current" : ""}`}
-      aria-current={props.section === n.key ? "page" : undefined}
-      aria-label={n.label}
-      data-tip={n.soon ? `${n.label} · Coming soon` : n.label}
-      onClick={() => props.onNavigate(n.key)}
-    >
-      <Icon name={n.icon} size={18} />
-      <span className="nav-label">{n.label}</span>
-      {n.soon && <span className="soon-dot" title="Not available yet" />}
-    </button>
-  );
   return (
-    <aside className={`sidebar${props.collapsed ? " collapsed" : ""}`} onMouseOver={onOver} onMouseLeave={hideTip} onMouseDown={hideTip}>
-      {tip &&
-        createPortal(
-          <div className="side-tip" role="tooltip" style={{ left: tip.x, top: tip.y }}>
-            {tip.label}
-          </div>,
-          document.body,
-        )}
-      <div className="brand">
-        <span className="brand-mark">
-          <Icon name="book" size={18} />
-        </span>
-        <span className="brand-text">
-          <span className="brand-name">{APP_NAME}</span>
-        </span>
-        <button
-          className="ghost icon-btn sidebar-toggle"
-          aria-expanded={!props.collapsed}
-          aria-label={props.collapsed ? "Expand menu" : "Collapse menu"}
-          title={props.collapsed ? undefined : "Collapse menu (Ctrl+B)"}
-          data-tip={props.collapsed ? "Expand menu (Ctrl+B)" : undefined}
-          onClick={() => props.onCollapsed(!props.collapsed)}
-        >
-          <Icon name="panelLeft" size={16} />
-        </button>
-      </div>
-      <nav className="nav" aria-label="Workspaces">
-        <div className="nav-heading">Workspaces</div>
-        {WORKSPACES.map(item)}
-        <div className="nav-heading">Storage Volumes</div>
-        {STORAGE.map(item)}
-      </nav>
-      <div className="sidebar-foot">
-        <div className="device-card">
-          <span className="device-mark">
-            <Icon name="lock" size={16} />
-          </span>
-          <span className="device-text">
-            <span className="device-title">On this device</span>
-            <span className="device-sub">Nothing leaves your computer</span>
-          </span>
-        </div>
-        <label className="switch-row" title="On save, remove links that run JavaScript or launch files, and embedded media/attachments">
-          <span>
-            <span className="switch-title">Sanitize on save</span>
-            <span className="switch-sub">Strip scripts, media &amp; attachments</span>
-          </span>
-          <input type="checkbox" className="switch" checked={props.sanitize} onChange={(e) => props.onSanitize(e.target.checked)} />
-        </label>
-        <div className="theme-row">
-          <span className="switch-title">Theme</span>
-          <div className="segmented" role="radiogroup" aria-label="Theme">
-            {THEMES.map((t) => (
-              <button
-                key={t.key}
-                role="radio"
-                aria-checked={props.theme === t.key}
-                className={props.theme === t.key ? "active" : undefined}
-                title={t.label}
-                aria-label={t.label}
-                onClick={() => props.onTheme(t.key)}
-              >
-                <Icon name={t.icon} size={14} />
-              </button>
-            ))}
+    <div className="settings" ref={box}>
+      <button
+        className={`ghost icon-btn${open ? " active" : ""}`}
+        aria-label="Settings"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Settings"
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="sliders" />
+      </button>
+      {open && (
+        <div className="settings-pop" role="dialog" aria-label="Settings">
+          <label className="settings-row" title="On save, remove links that run JavaScript or launch files, and embedded media and attachments">
+            <span>
+              <span className="settings-title">Sanitize on save</span>
+              <span className="settings-sub">Remove scripts, media and attachments</span>
+            </span>
+            <input
+              type="checkbox"
+              className="switch"
+              aria-label="Sanitize on save"
+              checked={props.sanitize}
+              onChange={(e) => props.onSanitize(e.target.checked)}
+            />
+          </label>
+          <label className="settings-row" title="Keep a list of files you opened in the Library. Turning it off also clears the list.">
+            <span>
+              <span className="settings-title">Remember recent files</span>
+              <span className="settings-sub">Shown in the Library. Off clears the list</span>
+            </span>
+            <input
+              type="checkbox"
+              className="switch"
+              aria-label="Remember recent files"
+              checked={props.recentEnabled}
+              onChange={(e) => props.onRecentEnabled(e.target.checked)}
+            />
+          </label>
+          <div className="settings-row">
+            <span className="settings-title">Theme</span>
+            <div className="segmented" role="radiogroup" aria-label="Theme">
+              {THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  role="radio"
+                  aria-checked={props.theme === t.key}
+                  className={props.theme === t.key ? "active" : undefined}
+                  onClick={() => props.onTheme(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
+          <p className="settings-note">Files are processed on this computer. Nothing is uploaded.</p>
         </div>
-      </div>
-    </aside>
-  );
-}
-
-/** Empty view for an area that is not built yet. */
-export function ComingSoon(props: { section: Section }) {
-  const info = SECTION_INFO[props.section];
-  return (
-    <div className="placeholder">
-      <div className="placeholder-card">
-        <span className="tile-icon big">
-          <Icon name={info.icon} size={26} />
-        </span>
-        <span className="badge gold">Coming soon</span>
-        <h1>{info.label}</h1>
-        <p>This workspace is not available yet. It will appear here in a later version.</p>
-      </div>
+      )}
     </div>
   );
 }
@@ -202,6 +153,11 @@ interface QuickAction {
 
 export function Library(props: {
   docs: DocInfo[];
+  /** The recent files list; `null` until it has loaded. */
+  recent: RecentView | null;
+  onOpenRecent: (id: number) => void;
+  onRemoveRecent: (id: number) => void;
+  onClearRecent: () => void;
   pageCount: number;
   dirty: boolean;
   onOpen: () => void;
@@ -213,10 +169,8 @@ export function Library(props: {
   const hasDoc = props.docs.length > 0;
   const actions: QuickAction[] = [
     { icon: "merge", title: "Merge PDFs", sub: "Combine files into one document", run: props.onAdd },
-    { icon: "stamp", title: "Watermark", sub: "Stamp text on every page", run: hasDoc ? props.onWatermark : undefined },
-    { icon: "eraser", title: "Remove watermarks", sub: "Find and strip stamps", run: hasDoc ? props.onClean : undefined },
-    { icon: "compress", title: "Compress", sub: "Coming soon" },
-    { icon: "scan", title: "Extract OCR", sub: "Coming soon" },
+    { icon: "stamp", title: "Add watermark", sub: "Put text on every page", run: hasDoc ? props.onWatermark : undefined },
+    { icon: "eraser", title: "Remove watermarks", sub: "Find and remove existing ones", run: hasDoc ? props.onClean : undefined },
   ];
 
   return (
@@ -224,11 +178,8 @@ export function Library(props: {
       <div className="library-inner">
         <header className="hero">
           <div>
-            <div className="eyebrow">
-              Library <span className="dot-sep" /> {hasDoc ? `${props.docs.length} open` : "Nothing open"}
-            </div>
-            <h1>Document Library &amp; Workstation</h1>
-            <p>Read, edit text in place, organize and merge pages, and stamp or strip watermarks. Everything runs on this device.</p>
+            <h1>Library</h1>
+            <p>{hasDoc ? `${props.docs.length} open` : "Nothing open"}</p>
           </div>
           <div className="hero-actions">
             <button className="primary big" onClick={props.onOpen}>
@@ -241,26 +192,8 @@ export function Library(props: {
         </header>
 
         <section>
-          <div className="section-label">
-            <span>Quick actions</span>
-          </div>
-          <div className="quick-grid">
-            {actions.map((a) => (
-              <button key={a.title} className="quick-card" onClick={a.run} disabled={!a.run}>
-                <span className="tile-icon">
-                  <Icon name={a.icon} size={18} />
-                </span>
-                {a.run && <Icon name="arrowRight" size={14} className="quick-arrow" />}
-                <b>{a.title}</b>
-                <span>{a.sub}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section>
           <div className="section-title">
-            <h2>Open in workspace</h2>
+            <h2>Open documents</h2>
             {hasDoc && (
               <span className="muted">
                 {props.pageCount} page{props.pageCount === 1 ? "" : "s"} from {props.docs.length} file
@@ -278,7 +211,6 @@ export function Library(props: {
                     </span>
                     {props.dirty && <span className="badge gold">Unsaved</span>}
                   </div>
-                  <div className="eyebrow small">PDF document</div>
                   <h3 title={d.fileName}>{d.fileName}</h3>
                   <div className="chips">
                     <span className="chip">
@@ -315,33 +247,63 @@ export function Library(props: {
           )}
         </section>
 
-        <section>
-          <div className="section-title">
-            <h2>Recent</h2>
-          </div>
-          <EmptyNote icon="clock" title="No recent documents yet">
-            Files you open will be listed here in a later version.
-          </EmptyNote>
-        </section>
+        {props.recent?.enabled && (
+          <section aria-labelledby="recent-heading">
+            <div className="section-title">
+              <h2 id="recent-heading">Recent</h2>
+              <div className="spacer" />
+              {props.recent.items.length > 0 && (
+                <button className="link" onClick={props.onClearRecent}>
+                  Clear list
+                </button>
+              )}
+            </div>
+            {props.recent.items.length > 0 ? (
+              <ul className="recent-list">
+                {props.recent.items.map((r) => (
+                  <li key={r.id} className="recent-row">
+                    <button className="recent-open" onClick={() => props.onOpenRecent(r.id)} title={`Open ${r.fileName}`}>
+                      <Icon name="fileText" size={18} />
+                      <span className="recent-name">{r.fileName}</span>
+                      <span className="recent-folder" title={r.folder}>
+                        {r.folder}
+                      </span>
+                      <span className="recent-when">{whenOpened(r.openedAt)}</span>
+                    </button>
+                    <button
+                      className="ghost icon-btn recent-remove"
+                      onClick={() => props.onRemoveRecent(r.id)}
+                      aria-label={`Remove ${r.fileName} from the list`}
+                      title="Remove from the list"
+                    >
+                      <Icon name="x" size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyNote icon="clock" title="No recent files">
+                Files you open will be listed here.
+              </EmptyNote>
+            )}
+          </section>
+        )}
 
-        <section className="info-cards">
-          <div className="info-card">
-            <div className="info-head">
-              <Icon name="lock" size={16} /> Private by design
-            </div>
-            <p>PDFs are parsed in a sandboxed engine on this computer. Nothing is uploaded.</p>
+        <section>
+          <div className="section-label">
+            <span>Quick actions</span>
           </div>
-          <div className="info-card">
-            <div className="info-head">
-              <Icon name="shield" size={16} /> Safe output
-            </div>
-            <p>Sanitize on save strips JavaScript actions, launch links, embedded media and attachments.</p>
-          </div>
-          <div className="info-card">
-            <div className="info-head">
-              <Icon name="layers" size={16} /> Non-destructive
-            </div>
-            <p>Edits stay in your workspace with full undo until you save a new file.</p>
+          <div className="quick-grid">
+            {actions.map((a) => (
+              <button key={a.title} className="quick-card" onClick={a.run} disabled={!a.run}>
+                <span className="tile-icon">
+                  <Icon name={a.icon} size={18} />
+                </span>
+                {a.run && <Icon name="arrowRight" size={14} className="quick-arrow" />}
+                <b>{a.title}</b>
+                <span>{a.sub}</span>
+              </button>
+            ))}
           </div>
         </section>
       </div>

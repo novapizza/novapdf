@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { FIXTURES, WORK_DIR } from "./paths";
-import { type App, expect, launchApp, statusBar, test, toast } from "./app";
+import { type App, expect, launchApp, statusBar, test, toast, showView } from "./app";
 // @ts-expect-error plain .mjs helper without types
 import { SAMPLE } from "./fixtures/make-pdfs.mjs";
 
@@ -18,7 +18,7 @@ function outPath(name: string) {
 async function openInEditor(app: App, file: string, pages: number) {
   await app.drop([file]);
   await expect(statusBar(app.page)).toContainText(`of ${pages}`);
-  await app.page.getByRole("button", { name: /Advanced Editor/ }).click();
+  await showView(app.page, "Edit");
   await expect(app.page.getByRole("radiogroup", { name: "Edit tool" })).toBeVisible();
 }
 
@@ -141,7 +141,7 @@ test.describe("rotation and page order", () => {
     await page.keyboard.press("Control+Shift+O"); // Merge into this document
     await expect(toast(page, "Merged second.pdf (2 pages)")).toBeVisible();
     await expect(statusBar(page)).toContainText("of 5");
-    await page.getByRole("button", { name: /Page Organizer/ }).click();
+    await showView(page, "Organize");
     // Delete sample pages 2-3, rotate the first second.pdf page.
     await page.getByLabel("Page 2", { exact: true }).click();
     await page.getByLabel("Page 3", { exact: true }).click({ modifiers: ["Shift"] });
@@ -154,7 +154,7 @@ test.describe("rotation and page order", () => {
     await reopen(saved, async (fresh) => {
       await fresh.drop([saved]);
       await expect(statusBar(fresh.page)).toContainText("of 3");
-      await fresh.page.getByRole("button", { name: /Page Organizer/ }).click();
+      await showView(fresh.page, "Organize");
       await expect(fresh.page.getByLabel("Page 1", { exact: true }).getByText("Letter Portrait")).toBeVisible();
       // Rotation is baked into the saved page: A4 shown landscape with no app rotation.
       await expect(fresh.page.getByLabel("Page 2", { exact: true }).getByText("A4 Landscape")).toBeVisible();

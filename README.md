@@ -37,6 +37,9 @@ a bump also updates the hashes.
 | Add text | Text boxes with font, size, colour, bold/italic, alignment, line height and wrap width. Drag to move |
 | Comments | In read view: highlight text, add sticky notes, draw with a pen or a see-through marker, select and copy text. Notes can be dragged, or nudged with the arrow keys (Shift for 10 pt); Tab reaches every comment and Enter opens it. A highlight that carries a comment shows a small badge. Comments already in the file open in a card where their text can be edited in place or deleted (with their popup and replies). The *Marks* tab lists every comment in the document. Written as real PDF annotations (`/Annots`), never into the page content. Edit mode shows comments but does not create them |
 | Outline | The *Outline* tab shows the file's bookmarks as a tree, collapsed where the file says. Clicking one goes to its page and the spot on it; the entry for the section being read is marked. Bookmarks follow pages that were moved, and are greyed out for pages that were removed. With merged files, each file's outline is listed under its name |
+| Password-protected files | Opening one asks for its password; a wrong one can be retried. The tab shows a lock. A save keeps the password: the saved file is encrypted with AES-256 and opens with the same password |
+| Recent files | The Library lists the last 10 files opened, newest first. A click reopens one, without a dialog. Files that were moved or deleted are taken off when clicked. The list can be cleared, and turned off in Settings (which also clears it) |
+| Find | Ctrl+F in read view searches the text of the file, ignoring case and line breaks, and marks every match on the page. Enter and Shift+Enter step through them. Text is read page by page from the sandboxed worker and only the matches are kept |
 | Watermark | Text watermark on every page (font, size, colour, opacity, angle), written as a real PDF object tagged `/Artifact /Watermark` |
 | Remove watermarks | Finds tagged watermark artifacts, watermark annotations, and, given the text, untagged watermark text (fragments only when rotated or transparent, so body text is never touched) |
 | Save | Builds a new PDF with PDFium. Unchanged pages are copied untouched (vector, links, annotations kept); the "Sanitize" option removes risky annotations |
@@ -104,7 +107,12 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
 * **UI has no file access.** Open and save dialogs run in Rust. Dropped files, and files
   the OS opens the app with (a double-clicked PDF: the command line on Windows, an
   open-documents event on macOS), are recorded as one-time grants in Rust before the UI
-  hears about them. The UI
+  hears about them. The recent files list is kept in Rust as well: the UI gets file names
+  and ids, never paths, and reopens an entry by its id, so it still cannot name a file to
+  read. A file that needs a password is held in Rust under a one-time id that the UI
+  sends with the password. Passwords are kept in memory only while their document is
+  open (any worker may have to load it again), are never written to disk, and are
+  overwritten when the document closes. The UI
   capability set has no fs or dialog open/save permissions. A strict CSP is set, and
   navigation away from the app is blocked.
 * **Bounded inputs.** 512 MB file limit with a `%PDF-` header check, bounded IPC frames,
@@ -121,7 +129,12 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   paragraphs (rotated text can still be deleted).
 * Page-level `/AA` actions cannot be removed through PDFium's API. Copied form widgets keep
   their appearance but lose the AcroForm dictionary.
-* Password-protected PDFs are rejected.
+* Password-protected PDFs: a save keeps the open password (AES-256), but not the
+  original's restrictions (printing, copying, editing): the saved file grants every
+  permission. Files with only restrictions and no open password already opened without a
+  prompt, and are still saved without protection. A save that combines files with
+  different passwords uses the password of the first protected one in page order (the
+  save warns).
 * The OS sandbox covers Windows and macOS. On Linux the worker is still isolated with
   timeouts and restart, but has no sandbox or memory cap; add seccomp/landlock before
   shipping there.
@@ -134,6 +147,9 @@ PDF is a hostile format, so untrusted bytes are parsed only in the worker:
   replaces it with the plain text. New notes get no `/Popup` annotation (viewers create one
   when the note is opened). A highlight stays where it was drawn when the text under it is
   edited (the editor warns).
+* Find searches the text of the file as opened, in read view only: text you changed or
+  added in the editor is not found until the document is saved and reopened. Scanned
+  pages without a text layer have nothing to find. A search stops after 2,000 matches.
 * Bookmarks are shown but not edited, and a saved PDF has none: saving builds a new
   document page by page, and the outline is not carried over. Long outlines are capped
   (10,000 entries, 32 levels); past 200 distinct pages, a bookmark goes to the top of its

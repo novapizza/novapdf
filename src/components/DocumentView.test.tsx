@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { useMemo, useReducer, useState } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DocumentView } from "./DocumentView";
+import { FIND_DELAY_MS, DocumentView } from "./DocumentView";
 import { type Workspace, initialHistory, reducer } from "../state/workspace";
 import type { AnnotInfo, LooseText, NewAnnot, Outline, PageEdits, PageText, TextChars } from "../lib/types";
 import { EMPTY_EDITS } from "../lib/types";
@@ -74,6 +74,8 @@ interface Opts {
   edits?: Record<number, PageEdits>;
   /** The document's bookmarks. */
   outline?: Outline;
+  /** Find in document is open. */
+  find?: boolean;
 }
 
 function setup(opts: Opts = {}) {
@@ -82,6 +84,8 @@ function setup(opts: Opts = {}) {
   const onExitEdit = vi.fn();
   const onRemoveEverywhere = vi.fn();
   const onWatermark = vi.fn();
+  const onFindClose = vi.fn();
+  const findRequest = 1;
   const state: { ws: Workspace } = { ws: initialHistory.present };
   tauriMock.handle("render_page", () => JPEG_BYTES);
   tauriMock.handle("list_annotations", (a) =>
@@ -131,6 +135,8 @@ function setup(opts: Opts = {}) {
         onExitEdit={onExitEdit}
         onRemoveEverywhere={onRemoveEverywhere}
         onWatermark={onWatermark}
+        findRequest={opts.find ? findRequest : 0}
+        onFindClose={onFindClose}
         notify={notify}
         readTool={readTool}
         annotStyle={DEFAULT_ANNOT_STYLE}
@@ -144,7 +150,7 @@ function setup(opts: Opts = {}) {
   const edits = (i: number) => state.ws.pages[i].edits;
   const useTool = (t: ReadTool) => act(() => setTool(t));
   const switchMode = (m: "read" | "edit") => act(async () => setModeOut(m));
-  return { ...utils, docId, notify, onExitEdit, onRemoveEverywhere, onWatermark, state, edits, tool, useTool, switchMode };
+  return { ...utils, docId, notify, onExitEdit, onRemoveEverywhere, onWatermark, onFindClose, state, edits, tool, useTool, switchMode };
 }
 
 const surface = (n: number) => document.querySelector<HTMLElement>(`.page-surface[data-page="${n}"]`)!;
@@ -160,7 +166,6 @@ describe("DocumentView: reading", () => {
     setup({ mode: "read" });
     expect(await screen.findByAltText("Page 1")).toHaveAttribute("src", expect.stringMatching(/^blob:/));
     expect(document.querySelector(".ov-para")).toBeNull();
-    expect(screen.getByText("Reading & review")).toBeInTheDocument();
     expect(tauriMock.calls("extract_page")).toHaveLength(0);
     // Read mode applies the app-level rotation.
     await waitFor(() =>
@@ -168,26 +173,56 @@ describe("DocumentView: reading", () => {
     );
   });
 
+  it("fit-width stops at 150% in a wide window, so pages stay light to render", async () => {
+    // A 3000 px wide view would put a 792 pt page at 373% of its real size.
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 3000 });
+    try {
+      setup({ mode: "read" });
+      const pill = screen.getByRole("toolbar", { name: "Page and zoom" });
+      expect(pill).toHaveTextContent("150%");
+      // 792 pt at 150% is 1584 px: the render asked for is that wide, not 3000.
+      const widest = () =>
+        Math.max(
+          0,
+          ...tauriMock
+            .calls("render_page")
+            .map((c) => c.args as { width: number; priority: string })
+            .filter((a) => a.priority === "view")
+            .map((a) => a.width),
+        );
+      await waitFor(() => expect(widest()).toBe(1600));
+      // Zooming in past it is still allowed.
+      await userEvent.click(within(pill).getByRole("button", { name: "Zoom in" }));
+      expect(pill).toHaveTextContent("180%");
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 900 });
+    }
+  });
+
   it("zoom buttons and keyboard shortcuts", async () => {
     setup({ mode: "read" });
     const pill = screen.getByRole("toolbar", { name: "Page and zoom" });
+    // The readout is the size against the printed page, not against fit-width: a 792 pt
+    // wide page fitted to 852 px is 81% of its real size.
+    expect(pill).toHaveTextContent("81%");
+    expect(within(pill).getByRole("button", { name: "Fit width" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(within(pill).getByRole("button", { name: "Zoom in" }));
-    expect(pill).toHaveTextContent("120%");
+    expect(pill).toHaveTextContent("97%");
     await userEvent.click(within(pill).getByRole("button", { name: "Zoom out" }));
-    expect(pill).toHaveTextContent("100%");
+    expect(pill).toHaveTextContent("81%");
     press({ key: "=", ctrlKey: true });
-    expect(pill).toHaveTextContent("120%");
+    expect(pill).toHaveTextContent("97%");
     press({ key: "0", ctrlKey: true });
-    expect(pill).toHaveTextContent("100%");
+    expect(pill).toHaveTextContent("81%");
     press({ key: "-", ctrlKey: true });
-    expect(pill).toHaveTextContent("83%");
+    expect(pill).toHaveTextContent("67%");
     await userEvent.click(within(pill).getByRole("button", { name: "Fit width" }));
-    expect(pill).toHaveTextContent("100%");
+    expect(pill).toHaveTextContent("81%");
     const scroll = document.querySelector(".doc-scroll")!;
     fireEvent.wheel(scroll, { deltaY: -100, ctrlKey: true });
-    expect(pill).toHaveTextContent("110%");
+    expect(pill).toHaveTextContent("89%");
     fireEvent.wheel(scroll, { deltaY: -100 }); // plain wheel scrolls, does not zoom
-    expect(pill).toHaveTextContent("110%");
+    expect(pill).toHaveTextContent("89%");
   });
 
   it("page number box: valid numbers jump, others reset", async () => {
@@ -215,7 +250,7 @@ describe("DocumentView: reading", () => {
     expect(document.querySelector<HTMLElement>(".doc-scroll")!.scrollTop).toBeGreaterThan(500);
     await userEvent.click(within(strip).getByRole("tab", { name: "Outline" }));
     expect(await screen.findByText("No outline")).toBeInTheDocument();
-    await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
+    await userEvent.click(within(strip).getByRole("tab", { name: "Comments" }));
     expect(await screen.findByText("No comments yet")).toBeInTheDocument();
     await userEvent.click(within(strip).getByRole("tab", { name: /Pages/ }));
     await userEvent.click(screen.getByRole("button", { name: "Toggle page thumbnails" }));
@@ -351,7 +386,7 @@ describe("DocumentView: editing text", () => {
   it("adds a text box with the text tool", async () => {
     const { edits } = setup();
     press({ key: "t" });
-    expect(screen.getByRole("radio", { name: /Add Text/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Add text/ })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(surface(1), { clientX: 200, clientY: 100 });
     await userEvent.type(editor(), "New note");
     fireEvent.blur(editor());
@@ -361,7 +396,7 @@ describe("DocumentView: editing text", () => {
 
   it("an empty new text box is discarded", async () => {
     const { edits } = setup();
-    await userEvent.click(screen.getByRole("radio", { name: /Add Text/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /Add text/ }));
     fireEvent.click(surface(1), { clientX: 10, clientY: 10 });
     fireEvent.blur(editor());
     expect(edits(0).blocks).toEqual([]);
@@ -441,9 +476,9 @@ describe("DocumentView: editing text", () => {
     expect(edits(0).removedObjects).toEqual([]);
   });
 
-  it("Watermark Studio button", async () => {
+  it("Watermark button", async () => {
     const { onWatermark } = setup();
-    await userEvent.click(screen.getByRole("button", { name: /Watermark Studio/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Watermark/ }));
     expect(onWatermark).toHaveBeenCalled();
   });
 
@@ -792,10 +827,10 @@ describe("DocumentView: comments in read view", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("the Marks tab lists comments and opens one", async () => {
+  it("the Comments tab lists comments and opens one", async () => {
     const s = setup({ mode: "read", pages: 3, tool: "ink", annots: { 2: [annotInfo(0, { contents: "On page three" })] } });
     const strip = screen.getByRole("complementary", { name: "Pages" });
-    await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
+    await userEvent.click(within(strip).getByRole("tab", { name: "Comments" }));
     await userEvent.click(await screen.findByRole("button", { name: /On page three/ }));
     expect(s.tool.current).toBe("hand");
     expect(await screen.findByRole("dialog", { name: "Note" })).toBeInTheDocument();
@@ -815,9 +850,9 @@ describe("DocumentView: comments in read view", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(surface(1).querySelector(".annot-layer.dim [data-kind=note]")).not.toBeNull();
     expect(surface(1).querySelector(".annot-capture")).toBeNull();
-    // Opening a comment from the Marks tab in edit mode only scrolls to it.
+    // Opening a comment from the Comments tab in edit mode only scrolls to it.
     const strip = screen.getByRole("complementary", { name: "Pages" });
-    await userEvent.click(within(strip).getByRole("tab", { name: "Marks" }));
+    await userEvent.click(within(strip).getByRole("tab", { name: "Comments" }));
     await userEvent.click(await screen.findByRole("button", { name: /Half-written/ }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -829,5 +864,80 @@ describe("DocumentView: comments in read view", () => {
     await userEvent.type(editor(), " (revised)");
     fireEvent.keyDown(editor(), { key: "Enter", ctrlKey: true });
     expect(s.notify).toHaveBeenCalledWith(expect.stringContaining("has a highlight on it"));
+  });
+});
+
+describe("DocumentView: find in document", () => {
+  /** One 10×12 pt box per character on one line, starting at (50, y). */
+  const line = (text: string, y: number): TextChars => ({
+    codes: [...text].map((ch) => ch.charCodeAt(0)),
+    boxes: [...text].flatMap((_, i) => [50 + i * 10, y, 10, 12]),
+  });
+  const findBox = () => screen.getByRole("textbox", { name: "Find in document" });
+  const findStatus = () => document.querySelector(".find-status")!;
+  const hits = (n: number) => surface(n).querySelectorAll(".find-hit");
+  const type = async (text: string) => {
+    fireEvent.change(findBox(), { target: { value: text } });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, FIND_DELAY_MS + 20));
+    });
+  };
+
+  it("marks every match, shows the count, and steps through them with wrap-around", async () => {
+    const { onFindClose } = setup({
+      mode: "read",
+      pages: 3,
+      find: true,
+      chars: { 0: line("soil and soil", 100), 2: line("more soil", 300) },
+    });
+    expect(findBox()).toHaveFocus();
+    await type("Soil");
+    await waitFor(() => expect(findStatus()).toHaveTextContent("1 of 3"));
+    expect(hits(1)).toHaveLength(2);
+    expect(surface(1).querySelectorAll(".find-hit.active")).toHaveLength(1);
+    // Each page was read once, straight from the worker.
+    expect(tauriMock.calls("text_chars")).toHaveLength(3);
+
+    fireEvent.keyDown(findBox(), { key: "Enter" });
+    expect(findStatus()).toHaveTextContent("2 of 3");
+    await userEvent.click(screen.getByRole("button", { name: "Next match" }));
+    expect(findStatus()).toHaveTextContent("3 of 3");
+    // The third match is on page 3: the view scrolled there.
+    const scroll = document.querySelector<HTMLElement>(".doc-scroll")!;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    fireEvent.keyDown(findBox(), { key: "Enter" });
+    expect(findStatus()).toHaveTextContent("1 of 3");
+    fireEvent.keyDown(findBox(), { key: "Enter", shiftKey: true });
+    expect(findStatus()).toHaveTextContent("3 of 3");
+
+    fireEvent.keyDown(findBox(), { key: "Escape" });
+    expect(onFindClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("no match, then an emptied box clears the marks", async () => {
+    setup({ mode: "read", pages: 2, find: true, chars: { 0: line("soil", 100) } });
+    await type("soil");
+    await waitFor(() => expect(hits(1)).toHaveLength(1));
+    await type("granite");
+    await waitFor(() => expect(findStatus()).toHaveTextContent("No results"));
+    expect(hits(1)).toHaveLength(0);
+    // Stepping with nothing found does nothing.
+    fireEvent.keyDown(findBox(), { key: "Enter" });
+    expect(findStatus()).toHaveTextContent("No results");
+    await type("");
+    expect(findStatus()).toHaveTextContent("");
+  });
+
+  it("a new query replaces a search that has not started yet", async () => {
+    setup({ mode: "read", pages: 1, find: true, chars: { 0: line("soil", 100) } });
+    fireEvent.change(findBox(), { target: { value: "so" } });
+    await type("soil");
+    await waitFor(() => expect(findStatus()).toHaveTextContent("1 of 1"));
+    expect(tauriMock.calls("text_chars")).toHaveLength(1);
+  });
+
+  it("is a read-view tool: edit mode has no find box", () => {
+    setup({ mode: "edit", find: true });
+    expect(screen.queryByRole("textbox", { name: "Find in document" })).not.toBeInTheDocument();
   });
 });

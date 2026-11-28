@@ -75,12 +75,12 @@ export interface AnnotActions {
   error(message: string): void;
 }
 
-export const READ_TOOLS: { key: ReadTool; label: string; icon: IconName; title: string; gold?: boolean }[] = [
+export const READ_TOOLS: { key: ReadTool; label: string; icon: IconName; title: string }[] = [
   { key: "hand", label: "Hand", icon: "hand", title: "Scroll, read and open comments (Esc)" },
   { key: "select", label: "Select", icon: "pointer", title: "Select text to copy or highlight" },
-  { key: "highlight", label: "Highlight", icon: "highlighter", title: "Drag over text to highlight it", gold: true },
-  { key: "note", label: "Note", icon: "note", title: "Click to add a sticky note", gold: true },
-  { key: "ink", label: "Ink", icon: "ink", title: "Draw freehand with a pen or a marker", gold: true },
+  { key: "highlight", label: "Highlight", icon: "highlighter", title: "Drag over text to highlight it" },
+  { key: "note", label: "Note", icon: "note", title: "Click to add a sticky note" },
+  { key: "ink", label: "Draw", icon: "ink", title: "Draw freehand with a pen or a marker" },
 ];
 
 export const SWATCHES: { name: string; rgb: RGB }[] = [
@@ -131,8 +131,16 @@ interface Props {
   /** A new note being written on this page. */
   draft: NewAnnot | null;
   textSel: TextSel | null;
+  find?: FindMarks | null;
   rank: number;
   actions: AnnotActions;
+}
+
+/** Find matches on one page: the rectangles of each match, and which match is the
+ *  one being shown (-1 when it is on another page). */
+export interface FindMarks {
+  rects: Rect[][];
+  active: number;
 }
 
 const rgb = (c: RGB) => `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -409,6 +417,18 @@ export function AnnotationLayer(p: Props) {
           {p.textSel?.rects.map((r, i) => (
             <rect key={`s${i}`} className="text-sel" x={r.x} y={r.y} width={r.width} height={r.height} />
           ))}
+          {p.find?.rects.map((match, m) =>
+            match.map((r, i) => (
+              <rect
+                key={`f${m}-${i}`}
+                className={`find-hit${m === p.find!.active ? " active" : ""}`}
+                x={r.x}
+                y={r.y}
+                width={r.width}
+                height={r.height}
+              />
+            )),
+          )}
           {liveInk && p.style.marker && (
             <Stroke points={liveInk} color={p.style.highlight} width={MARKER_WIDTH} opacity={MARKER_OPACITY} />
           )}

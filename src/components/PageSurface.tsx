@@ -8,11 +8,19 @@ import { cached, requestRender } from "../lib/renderCache";
 import type { LooseText, NewAnnot, PageEdits, PageText, Paragraph, TextBlock, Watermark } from "../lib/types";
 import { editsAreEmpty, viewEdits } from "../lib/types";
 import type { PageItem } from "../state/workspace";
-import { type AnnotActions, type AnnotRef, type AnnotStyle, AnnotationLayer, type ReadTool, type TextSel } from "./AnnotationLayer";
+import {
+  type AnnotActions,
+  type AnnotRef,
+  type AnnotStyle,
+  AnnotationLayer,
+  type FindMarks,
+  type ReadTool,
+  type TextSel,
+} from "./AnnotationLayer";
 import { thumbRequest } from "./PageGrid";
 
 /** Width of the filmstrip thumbnails, whose cached images double as placeholders. */
-export const STRIP_W = 148;
+export const STRIP_W = 176;
 /** Pages that mount further from the reader wait this long, so pages that fly past
  *  while scrolling never hit the worker. */
 const RENDER_DELAY_MS = 90;
@@ -77,6 +85,8 @@ interface Props {
   annotSelected: AnnotRef | null;
   noteDraft: NewAnnot | null;
   textSel: TextSel | null;
+  /** Find matches on this page (read view), or null. */
+  find?: FindMarks | null;
   annotActions: AnnotActions;
 }
 
@@ -224,6 +234,7 @@ export const PageSurface = memo(function PageSurface(p: Props) {
         selected={p.annotSelected}
         draft={p.noteDraft}
         textSel={p.textSel}
+        find={p.find}
         rank={p.rank}
         actions={p.annotActions}
       />

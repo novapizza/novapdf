@@ -47,6 +47,8 @@ There are three tiers. One executable is both the app and the worker: `main.rs` 
    - `host.rs` runs the worker pool and keeps document bytes in RAM. It also handles per-request timeouts (render 30 s, extract 30 s, save 300 s), restarts crashed workers, recycles thumbnail workers after `RECYCLE_AFTER_RENDERS`, and stops idle workers that hold documents (`trim_idle`, driven by a timer in `lib.rs`). Any worker can be killed at any time, so workers must hold no state that can't be rebuilt from the host's bytes.
    - `shared.rs`: on Windows the document bytes live once in an anonymous section. Each worker gets a map-read-only handle via `Request::OpenShared`, instead of the bytes going in an `Open` payload. Other platforms, or a failed section, fall back to `Open`.
    - `sandbox.rs`: on Windows, Job Object (3 GB memory cap, no child processes), Low integrity, and process mitigations. On macOS (`sandbox/mac.rs`), a Seatbelt profile that only allows reading font folders, plus the host-side memory watchdog (`enforce_memory_limit`, polled from `lib.rs`). Anything new the worker reads after start-up must be allowed in that profile, or it fails silently on macOS.
+   - Password-protected files: the worker reports `protocol::NEEDS_PASSWORD`; `commands.rs` then holds the file under a one-time id (`Locked`) and the UI sends the password with that id (`unlock_file`). `host.rs` keeps each document's password in memory while it is open, so any worker can load it again. Saves of protected documents are encrypted with AES-256 in the worker (`worker/encrypt.rs`, lopdf) using a key the host makes; PDFium cannot encrypt.
+   - `recent.rs` keeps the recent files list, stored as JSON in the app's data folder. The UI gets names and ids, never paths, and opens an entry with `open_recent(id)`; only files that opened successfully are recorded. A missing file is taken off the list when opened.
    - `protocol.rs` defines the framed stdin/stdout IPC types and the edit model, and validates both.
 3. **PDF worker** (`src-tauri/src/worker/`) is the only place untrusted PDF bytes are parsed:
    - `pdf.rs` wraps PDFium
@@ -76,6 +78,7 @@ Debug-only hooks, compiled out of release builds:
 - The main window is created hidden and shown on page load, with a 3 s fallback (`lib.rs`), to avoid a white flash at startup.
 - `NOVAPDF_DEV_SAVE_TO` makes *Save as…* skip the native dialog (see `save_with_dialog` in `commands.rs`).
 - `NOVAPDF_DEV_PICK=list.txt` makes *Open*/*Merge* return the paths in that file instead of showing the native dialog (see `open_with_dialog`).
+- `NOVAPDF_DEV_DATA_DIR` puts the recent files list (`recent.json`) in that folder instead of the app's data folder (`recent_file` in `lib.rs`). `launchApp` gives each launch its own unless `dataDir` is passed, so tests never touch the developer's list.
 - `NOVAPDF_DEV_MULTI_INSTANCE=1` turns off the single-instance lock (`single_instance` in `lib.rs`), so a test can open a second app to check a save. `launchApp` sets it unless `singleInstance: true`.
 
 E2E tests depend on these.

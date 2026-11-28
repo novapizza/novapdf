@@ -40,7 +40,7 @@ async function show(page: Page, n: number, y: number) {
 }
 
 async function marks(page: Page) {
-  await page.getByRole("tab", { name: "Marks" }).click();
+  await page.getByRole("tab", { name: "Comments", exact: true }).click();
   return page.getByRole("list", { name: "Comments" });
 }
 
@@ -119,11 +119,16 @@ test.describe("comments", () => {
       await expect(fresh.page.locator("[data-kind=badge]")).toHaveCount(1);
 
       // The note is where it was dragged to.
+      // Polled: the fresh window may still be settling to its maximized size, which
+      // re-centres the page under the note between two measurements.
       const hit = fresh.page.locator('[data-testid^="file-annot-"][title^="Checked by"]');
-      const box = (await hit.boundingBox())!;
-      const corner = await at(fresh.page, 1, 310, 450);
-      expect(Math.abs(box.x - corner.x)).toBeLessThan(3);
-      expect(Math.abs(box.y - corner.y)).toBeLessThan(3);
+      await expect
+        .poll(async () => {
+          const box = (await hit.boundingBox())!;
+          const corner = await at(fresh.page, 1, 310, 450);
+          return Math.max(Math.abs(box.x - corner.x), Math.abs(box.y - corner.y));
+        })
+        .toBeLessThan(3);
 
       // Comments read from the file open in a card, and can be deleted.
       await note.click();

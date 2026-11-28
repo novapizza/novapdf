@@ -25,6 +25,10 @@ export interface AppOptions {
   singleInstance?: boolean;
   /** Command-line arguments, as the OS passes a double-clicked file. */
   args?: string[];
+  /** The app's data folder (the recent files list). Pass the same folder to two
+   *  launches to see what one left for the next; by default each launch gets its own,
+   *  so tests never read or change the developer's own list. */
+  dataDir?: string;
 }
 
 export interface App {
@@ -79,6 +83,7 @@ export async function launchApp(opts: AppOptions = {}): Promise<App> {
     NOVAPDF_DEV_SAVE_TO: opts.saveTo ?? "",
     NOVAPDF_DEV_PICK: pickFile,
     NOVAPDF_DEV_MULTI_INSTANCE: opts.singleInstance ? "" : "1",
+    NOVAPDF_DEV_DATA_DIR: opts.dataDir ?? profile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     // A fresh profile per launch: no theme or storage carried between tests.
     WEBVIEW2_USER_DATA_FOLDER: profile,
@@ -159,3 +164,7 @@ export { expect };
 export const statusBar = (page: Page) => page.locator("footer.status");
 /** Toast messages. */
 export const toast = (page: Page, text: string | RegExp) => page.locator(".toast", { hasText: text });
+
+/** Switches the view with the Read | Organize | Edit control in the top bar. */
+export const showView = (page: Page, name: "Read" | "Organize" | "Edit") =>
+  page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name }).click();

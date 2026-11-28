@@ -8,7 +8,11 @@
 // second.pdf  2 A4 pages with one line each (for merging).
 // spec-watermark.pdf  1 page, watermark tagged with a name /Subtype /Watermark.
 // outlined.pdf  4 pages with a two-level outline (bookmarks), see OUTLINED.
+// protected.pdf  sample.pdf's first page, encrypted (RC4 128-bit, revision 3) with the
+//             open password PROTECTED.password. Encrypted here by hand, independently
+//             of the app's own encryption code.
 // not-a.pdf   Text with a .pdf name (must be rejected).
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -19,7 +23,7 @@ const esc = (s) => s.replace(/[\\()]/g, (c) => `\\${c}`);
  * `outline`: bookmarks `{ title, page?, y?, uri?, open?, children? }`, where `page` is
  * a 0-based page index and `y` is in PDF space (from the bottom).
  */
-export function buildPdf(pages, { width = 612, height = 792, outline = null } = {}) {
+export function buildPdf(pages, { width = 612, height = 792, outline = null, encrypt = null } = {}) {
   const objs = []; // index i → object number i + 1
   const add = (body) => objs.push(body) && objs.length;
 
@@ -28,15 +32,21 @@ export function buildPdf(pages, { width = 612, height = 792, outline = null } = 
   const f1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
   const f2 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
   const gs = add("<< /Type /ExtGState /ca 0.3 /CA 0.3 >>");
+  const sec = encrypt ? standardSecurity(encrypt.user, encrypt.owner) : null;
   const kids = pages.map((content) => {
-    const stream = add(`<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`);
+    // Encrypted files encrypt each stream with a key made from its object number.
+    const n = objs.length + 1;
+    const data = sec ? rc4(sec.objectKey(n), Buffer.from(content, "latin1")).toString("latin1") : content;
+    const stream = add(`<< /Length ${Buffer.byteLength(data, "latin1")} >>\nstream\n${data}\nendstream`);
     return add(
       `<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${width} ${height}] ` +
         `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> /ExtGState << /GS1 ${gs} 0 R >> >> ` +
         `/Contents ${stream} 0 R >>`,
     );
   });
+  if (sec && outline) throw new Error("buildPdf: outline titles are not encrypted; do not combine");
   const outlines = outline ? addOutline(add, objs, outline, kids) : null;
+  const encryptObj = sec ? add(sec.dict) : null;
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R${outlines ? ` /Outlines ${outlines} 0 R` : ""} >>`;
   objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
 
@@ -49,9 +59,72 @@ export function buildPdf(pages, { width = 612, height = 792, outline = null } = 
   const xref = Buffer.byteLength(out, "latin1");
   out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
   for (const o of offsets) out += `${String(o).padStart(10, "0")} 00000 n \n`;
-  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const extra = sec ? ` /Encrypt ${encryptObj} 0 R /ID [<${sec.id.toString("hex")}> <${sec.id.toString("hex")}>]` : "";
+  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R${extra} >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, "latin1");
 }
+
+const md5 = (...parts) => {
+  const h = createHash("md5");
+  for (const p of parts) h.update(p);
+  return h.digest();
+};
+
+/** RC4, which Node's OpenSSL no longer offers. */
+function rc4(key, data) {
+  const s = [...Array(256).keys()];
+  for (let i = 0, j = 0; i < 256; i++) {
+    j = (j + s[i] + key[i % key.length]) & 255;
+    [s[i], s[j]] = [s[j], s[i]];
+  }
+  const out = Buffer.alloc(data.length);
+  for (let k = 0, i = 0, j = 0; k < data.length; k++) {
+    i = (i + 1) & 255;
+    j = (j + s[i]) & 255;
+    [s[i], s[j]] = [s[j], s[i]];
+    out[k] = data[k] ^ s[(s[i] + s[j]) & 255];
+  }
+  return out;
+}
+
+/**
+ * The PDF standard security handler, revision 3 (RC4, 128-bit key), as in ISO 32000-1
+ * §7.6.3: algorithms 2 (file key), 3 (O entry) and 5 (U entry). All permissions granted.
+ */
+function standardSecurity(user, owner) {
+  const PAD = Buffer.from("28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A", "hex");
+  const pad = (pw) => Buffer.concat([Buffer.from(pw, "latin1"), PAD]).subarray(0, 32);
+  const xorKey = (key, i) => Buffer.from(key.map((b) => b ^ i));
+  const P = -4;
+  const id = md5("novapdf-e2e-protected");
+
+  // O: the user password padded, encrypted with a key from the owner password.
+  let h = md5(pad(owner));
+  for (let i = 0; i < 50; i++) h = md5(h);
+  let o = rc4(h, pad(user));
+  for (let i = 1; i <= 19; i++) o = rc4(xorKey(h, i), o);
+
+  // The file key, from the user password, O, P and the file ID.
+  const p = Buffer.alloc(4);
+  p.writeInt32LE(P);
+  let key = md5(pad(user), o, p, id);
+  for (let i = 0; i < 50; i++) key = md5(key);
+
+  // U: the padding hashed with the file ID, encrypted 20 times, then 16 arbitrary bytes.
+  let u = rc4(key, md5(PAD, id));
+  for (let i = 1; i <= 19; i++) u = rc4(xorKey(key, i), u);
+  u = Buffer.concat([u, Buffer.alloc(16)]);
+
+  return {
+    id,
+    dict: `<< /Filter /Standard /V 2 /R 3 /Length 128 /P ${P} /O <${o.toString("hex")}> /U <${u.toString("hex")}> >>`,
+    /** The key for one object's strings and streams (generation 0). */
+    objectKey: (n) => md5(key, Buffer.from([n & 255, (n >> 8) & 255, (n >> 16) & 255, 0, 0])).subarray(0, 16),
+  };
+}
+
+/** protected.pdf: its password, and the heading on its one page. */
+export const PROTECTED = { password: "open sesame", heading: "Confidential Field Report" };
 
 /** Adds the outline objects; returns the outline root's object number. */
 function addOutline(add, objs, items, kids) {
@@ -142,12 +215,19 @@ export function writeFixtures(dir) {
     ),
   );
   writeFileSync(join(dir, "not-a.pdf"), "This is plain text pretending to be a PDF.\n");
+  writeFileSync(
+    join(dir, "protected.pdf"),
+    buildPdf([[paragraph(72, 720, [PROTECTED.heading], "F2", 20, 24), paragraph(72, 680, SAMPLE.para1)].join("\n")], {
+      encrypt: { user: PROTECTED.password, owner: "owner secret" },
+    }),
+  );
   return {
     sample: join(dir, "sample.pdf"),
     second: join(dir, "second.pdf"),
     notPdf: join(dir, "not-a.pdf"),
     specWatermark: join(dir, "spec-watermark.pdf"),
     outlined: join(dir, "outlined.pdf"),
+    protected: join(dir, "protected.pdf"),
   };
 }
 
